@@ -682,7 +682,7 @@ function renderTrips(){const box=$('#triplist');if(!box)return;$('#whoami').inne
   const n=Date.now(),L=App.trips.map(t=>({t,se:tripSE(t)}));const dur=L.filter(x=>x.se[0]<=n&&n<=x.se[1]),up=L.filter(x=>x.se[0]>n).sort((a,b)=>a.se[0]-b.se[0]),past=L.filter(x=>x.se[1]<n).sort((a,b)=>b.se[1]-a.se[1]);
   const card=({t,se})=>{const st=se[0]>n?`還有 ${Math.floor((se[0]-n)/864e5)} 天`:n<=se[1]?`旅行中第 ${Math.floor((n-se[0])/864e5)+1} 天`:'已結束';
     return `<button class="card tripcard" data-act="open" data-id="${esc(t.id)}"><div class="ic" style="background:var(--mizu-l)"><svg viewBox="0 0 40 40" ${SA}>${t.hero==='trout'?P.fish:P.suitcase}</svg></div><div style="min-width:0"><h2>${esc(t.name)}</h2><div class="small muted">${esc(t.start||'')} 起 ${t.days||''} 天${t.sub?' · '+esc(t.sub):''}</div><span class="pill" style="display:inline-block;margin-top:4px${se[1]<n?';background:var(--paper)':''}">${st}</span></div>${ic('back').replace('M24 8L12 20l12 12','M16 8l12 12-12 12')}</button>`};
-  box.innerHTML=(dur.map(card).join('')+up.map(card).join('')||(past.length?'':(App.mode==='fb'&&!App.tripsLoaded?'<div class="empty">讀取中…</div>':`<div class="empty">${App.mode==='fb'?'目前沒有你能看的旅程。第一次使用請按下面的「匯入資料檔」；如果你是被邀請的人，請對方到「旅程設定」加入你的 Gmail。':'還沒有旅程。可以直接用整理好的「鱒魚遊戲」，或新增一個空白旅程。'}</div>`)))+
+  box.innerHTML=(dur.map(card).join('')+up.map(card).join('')||(past.length?'':(App.mode==='fb'&&!App.tripsLoaded?'<div class="empty">讀取中…</div>':`<div class="empty">${App.mode==='fb'?`目前登入的是 <b>${esc((App.user&&App.user.email)||'')}</b>，這個帳號還沒有旅程。<br>第一次使用：按下面的「匯入資料檔」。<br>用錯帳號：按上面的「登出」，換另一個 Gmail。<br>被邀請的人：請對方到「旅程設定」加入這個 Gmail。`:'還沒有旅程。可以直接用整理好的「鱒魚遊戲」，或新增一個空白旅程。'}</div>`)))+
    (past.length?`<details class="acc"><summary>已結束（${past.length}）</summary><div class="bd">${past.map(card).join('')}</div></details>`:'')+
    `<button class="btn big y" data-act="newtrip">${ic('plus')} 新增旅程</button><button class="btn big" data-act="importbk">${ic('note')} 匯入資料檔（.json）</button>${IS_PUBLIC||App.mode==='fb'||App.trips.some(t=>t.hero==='trout')?'':`<button class="btn big" data-act="importtrout">${ic('fish')} 匯入「鱒魚遊戲」行程</button>`}`}
 const COPYABLE=[['lists','待辦／行李清單'],['ko','救急卡','不同國家不會複製'],['tips','須知'],['book','預約表','「已預約」的勾會清空']];
@@ -1164,10 +1164,9 @@ function loadScript(u){return new Promise((res,rej)=>{const s=document.createEle
 async function loadFB(){for(const n of ['app','auth','firestore'])await loadScript(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-${n}-compat.js`);
   firebase.initializeApp(window.FIREBASE_CONFIG);const db=firebase.firestore();try{await db.enablePersistence({synchronizeTabs:true})}catch(e){}fb={auth:firebase.auth(),db}}
 const inApp=()=>/Line\/|Instagram|FBAN|FBAV|MicroMessenger|KAKAOTALK/i.test(navigator.userAgent);
-function renderLogin(msg){$('#loginbox').innerHTML=`<svg class="logo" viewBox="0 0 40 40" ${SA}>${P.suitcase}</svg><h1>旅行手帳</h1><div class="muted small">用 Google 帳號登入，兩個人看到同一份手帳</div>
+function renderLogin(msg){$('#loginbox').innerHTML=`<svg class="logo" viewBox="0 0 40 40" ${SA}>${P.suitcase}</svg><h1>旅行手帳</h1>
   ${inApp()?'<div class="warn2">你是從 LINE／IG 等 App 裡打開的，Google 不允許在這裡登入。請按右上角「⋯」→「用 Safari／瀏覽器開啟」。</div>':''}
-  <button class="btn big y" data-act="login">${ic('star')} 用 Google 帳號登入</button>${msg?`<div class="err">${esc(msg)}</div>`:''}
-  <div class="small muted">登入後，只有成員名單裡的 Gmail 看得到旅程</div>`}
+  <button class="btn big y" data-act="login">${ic('star')} 用 Google 帳號登入</button>${msg?`<div class="err">${esc(msg)}</div>`:''}`}
 function authMsg(e){const c=(e&&e.code)||'';return c==='auth/unauthorized-domain'?'這個網址還沒加進 Firebase 的「已授權網域」':c==='auth/network-request-failed'?'沒有網路，連上網路後再登入':c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request'?'':'登入失敗：'+(c||e&&e.message||'')}
 async function doLogin(){if(!fb)return;const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
   try{await fb.auth.signInWithPopup(p)}catch(e){if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(e.code)){try{await fb.auth.signInWithRedirect(p)}catch(e2){renderLogin(authMsg(e2))}}else renderLogin(authMsg(e))}}
