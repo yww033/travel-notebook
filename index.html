@@ -401,6 +401,12 @@ html.offline a.btn[href^="http"]::after{content:"需網路";font-size:10px;margi
 .bnav button.on svg,.tab.on svg,.login .logo{animation:bob 2.4s ease-in-out infinite}
 html.calm *,html.calm *::before,html.calm *::after{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+/* v19：對方更新的紅點 */
+#gearBtn{position:relative}
+#gearBtn.dot::after,.ndot{content:'';position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:var(--coral);border:2px solid var(--ink)}
+.ndot{position:static;display:inline-block;vertical-align:middle;margin-left:6px}
+.log li.new{background:#FDF1D3}
+.log .newtag{display:inline-block;font-size:11px;line-height:1;padding:3px 6px;border-radius:8px;background:var(--coral);border:1.5px solid var(--ink);margin-right:6px;vertical-align:1px}
 </style>
 </head>
 <body>
@@ -577,14 +583,14 @@ async function deleteTrip(id){if(App.mode==='demo'){lsSet('trips',(lsGet('trips'
   const ref=fb.db.collection('trips').doc(id);for(const k of DOC_KEYS){try{await ref.collection('docs').doc(k).delete()}catch(e){}}await ref.delete();goTrips()}
 
 /* --- 打開一個旅程 --- */
-function openTrip(id){closeTrip();const t=App.trips.find(x=>x.id===id);if(!t)return;App.tripId=id;App.meta=clone(t);delete App.meta.id;ST={};LOG=[];cur=0;Object.keys(WX).forEach(k=>delete WX[k]);wxAt=0;wxFail=false;srchQ='';foodType='all';foodCat=null;toolSub=null;openT.clear();$('#v-eat').innerHTML='';
+function openTrip(id){closeTrip();const t=App.trips.find(x=>x.id===id);if(!t)return;App.tripId=id;App.meta=clone(t);delete App.meta.id;ST={};LOG=[];if(lsGet(seenKey())==null)lsSet(seenKey(),Date.now());cur=0;Object.keys(WX).forEach(k=>delete WX[k]);wxAt=0;wxFail=false;srchQ='';foodType='all';foodCat=null;toolSub=null;openT.clear();$('#v-eat').innerHTML='';
   const ti=todayIdx();if(ti>=0)cur=ti;view=lsGet('view:'+id)||'today';
   if(App.mode==='demo'){DOC_KEYS.forEach(k=>{ST[k]=lsGet(`t:${id}:${k}`)||blankDocs(App.meta)[k]});LOG=lsGet(`t:${id}:log`)||[];migrate();showScreen('app');renderAll();show(view,false);loadWeather();autoFx();return}
   const ref=fb.db.collection('trips').doc(id);showScreen('app');DOC_KEYS.forEach(k=>{ST[k]=blankDocs(App.meta)[k]});renderAll();show(view,false);
   App.unsub.push(ref.onSnapshot(s=>{if(s.exists){App.meta=fsDec(s.data());renderTop()}}));
   loadWeather();autoFx();setTimeout(maybeTour,1200);
   DOC_KEYS.forEach(k=>App.unsub.push(ref.collection('docs').doc(k).onSnapshot(s=>{if(!s.metadata.fromCache)markSynced();const d=s.exists?fsDec(s.data()):blankDocs(App.meta)[k];if(k==='plan'&&(dragging||sheetOpen())){pending.plan=d;return}ST[k]=d;renderAll()},e=>toast('同步失敗：'+(e.code||'')))));
-  App.unsub.push(ref.collection('log').orderBy('at','desc').limit(60).onSnapshot(q=>{LOG=q.docs.map(d=>Object.assign({id:d.id},fsDec(d.data())));if(view==='tools')renderTools()}))}
+  App.unsub.push(ref.collection('log').orderBy('at','desc').limit(60).onSnapshot(q=>{LOG=q.docs.map(d=>Object.assign({id:d.id},fsDec(d.data())));paintLogDot();if(view==='tools')renderTools()}))}
 function migrate(){const m=App.meta;let ch=false;if(m.hero==='trout'&&!get('food').photoSeed){writeDoc('food',seedFoodPhotos(clone(get('food'))))}if(!m.country){Object.assign(m,{country:'KR',cur:m.cur||'KRW',lang:'ko-KR',map:'kr'});ch=true}if(m.hero==='trout'){if(!m.loc){m.loc=TROUT_LOC.S;ch=true}const p=get('plan');if(p.days.some(d=>!d.loc)){const np=clone(p);troutLocs(np);writeDoc('plan',np)}}
   const L0=get('lists');if(!L0.v9){const nl=clone(L0);const pt=nl.tabs.find(t=>t.id==='prep')||nl.tabs[0],rt=nl.tabs.find(t=>t.id==='remind');if(rt&&pt&&rt!==pt){pt.groups.push(...rt.groups);nl.tabs=nl.tabs.filter(t=>t!==rt)}nl.tabs.forEach(t=>{if(t.id==='prep'&&t.name==='行前待辦')t.name='待辦';if(t.id==='pack'&&t.name==='行李清單')t.name='行李'});nl.v9=1;writeDoc('lists',nl)}
   const F0=get('food');if(!F0.v9){const nf=clone(F0);nf.items.forEach(f=>{if(f.type==null&&m.hero==='trout')f.type=guessType(f.name);if(!f.recs)f.recs=splitRecs(f.must);delete f.must});const chn=nf.cats.find(c=>c.id==='chain');if(chn&&chn.name==='連鎖・飲料')chn.name='連鎖';nf.v9=1;writeDoc('food',nf)}
@@ -602,9 +608,15 @@ function commit(k,data,text){const prev=clone(get(k));writeDoc(k,data);addLog(k,
 function setKey(k,key,v,text){const d=clone(get(k));if(v)d.m[key]=v;else delete d.m[key];
   if(App.mode==='fb'){const prev=clone(get(k));ST[k]=d;track(fb.db.collection('trips').doc(App.tripId).collection('docs').doc(k).set({m:{[key]:v||firebase.firestore.FieldValue.delete()}},{merge:true})).catch(e=>toast('雲端沒有存到'));addLog(k,prev,text);renderAll()}else commit(k,d,text)}
 function whoName(){return App.mode==='fb'?(App.user.name||App.user.email):(lsGet('who')||'')}
+/* 對方更新提示：記住我上次看修改紀錄的時間，之後別人改的就算新的 */
+const seenKey=()=>`seen:${App.tripId}:${App.mode==='fb'&&App.user?App.user.uid:'local'}`;
+const myBy=()=>App.mode==='fb'&&App.user?App.user.email:'';
+const isMine=e=>e.by?e.by===myBy():(e.who||'')===whoName();
+function unreadLog(){const seen=+(lsGet(seenKey())||0);return LOG.filter(e=>e.at>seen&&(e.by||e.who)&&!isMine(e))}
+function paintLogDot(){const g=$('#gearBtn');if(g)g.classList.toggle('dot',!!App.tripId&&unreadLog().length>0)}
 function addLog(k,prev,text){const now=Date.now(),who=whoName(),last=LOG[0];
   if(last&&last.k===k&&['checks','arrive'].includes(k)&&last.who===who&&now-last.at<90000){last.at=now;last.text=text;if(App.mode==='fb')fb.db.collection('trips').doc(App.tripId).collection('log').doc(last.id).update({at:now,text}).catch(()=>{});else lsSet(`t:${App.tripId}:log`,LOG);return}
-  const e={id:'l'+now+uid(),at:now,who,text,k,prev};
+  const e={id:'l'+now+uid(),at:now,who,by:myBy(),text,k,prev};
   if(App.mode==='fb'){const{id,...rest}=e;fb.db.collection('trips').doc(App.tripId).collection('log').doc(id).set(fsEnc(rest)).catch(()=>{});LOG.unshift(e)}else{LOG.unshift(e);LOG=LOG.slice(0,50);lsSet(`t:${App.tripId}:log`,LOG)}}
 function restore(id){const e=LOG.find(x=>x.id===id);if(!e)return;$('#toast').hidden=true;if(e.k==='meta'){saveMeta(clone(e.prev),'復原：'+e.text)}else commit(e.k,clone(e.prev),'復原：'+e.text);toast('已復原')}
 
@@ -697,7 +709,7 @@ function newTripSheet(){form({title:'新增旅程',fields:[{k:'name',l:'旅程�
 const splitList=s=>String(s||'').split(/[,，、\s]+/).map(x=>x.trim()).filter(Boolean);
 
 /* ========== 頂部＋底部 ========== */
-function renderTop(){if(!App.meta)return;$('#tripTitle').textContent=App.meta.name;$('#backBtn').innerHTML=ic('back');$('#gearBtn').innerHTML=ic('gear')}
+function renderTop(){if(!App.meta)return;$('#tripTitle').textContent=App.meta.name;$('#backBtn').innerHTML=ic('back');$('#gearBtn').innerHTML=ic('gear');paintLogDot()}
 function renderNav(){$('#bnav').innerHTML=VIEWS.map(([k,n,i])=>k==='add'?`<button class="plusb" data-act="quick" aria-label="隨手記一筆"><span class="pc"><svg viewBox="0 0 40 40" ${SA}>${P.plus}</svg></span></button>`:`<button class="${view===k?'on':''}" data-act="view" data-v="${k}"><svg viewBox="0 0 40 40" ${SA}>${P[i]}</svg><span>${n}</span></button>`).join('')}
 
 /* ========== 今天 ========== */
@@ -863,7 +875,7 @@ function hotelBig(st){if(!st||(!st.addr&&!st.kr)){toast('還沒填住宿資料')
   d.onclick=e=>{if(!e.target.closest('a'))d.remove()};document.body.appendChild(d)}
 function gearSheet(){openSheet(`<h3>設定</h3><div class="rows">
   <button class="btn big" data-act="tripedit">${ic('pencil')} 旅程設定（名稱、日期、天氣地點）</button>
-  <button class="btn big" data-act="logsheet">${ic('note')} 修改紀錄</button>
+  <button class="btn big" data-act="logsheet">${ic('note')} 修改紀錄${unreadLog().length?`<span class="ndot" aria-label="有新的更新"></span><span class="small">${unreadLog().length} 筆新的</span>`:''}</button>
   <button class="btn big" data-act="voicesheet">${ic('sound')} 語音</button>
   <button class="btn big" data-act="tour">${ic('star')} 操作教學</button>
   <button class="btn big" data-act="exportbk">${ic('note')} 匯出資料（備份檔）</button>
@@ -872,7 +884,7 @@ function gearSheet(){openSheet(`<h3>設定</h3><div class="rows">
   <label class="cb"><input type="checkbox" id="calm" ${calm()?'checked':''}> 減少動態效果</label>
   <div class="small muted">${App.mode==='fb'?'資料存在雲端，你和旅伴看到的是同一份；沒訊號時會先存在手機，有網路再上傳。':CAN_SAVE?'資料目前只存在這台裝置的瀏覽器裡，清除瀏覽器資料會不見。':'這個瀏覽器不允許存資料，修改只會保留到關掉分頁。'}</div>
   <div class="acts"><button class="btn c" data-act="deltrip">${ic('trash','s')} 刪除這個旅程</button><button class="btn" data-act="close">關閉</button></div>`)}
-function logSheet(){openSheet(`<h3>修改紀錄</h3>${LOG.length?`<ul class="log">${LOG.slice(0,40).map(e=>`<li><div class="t">${esc(e.text)}<div class="small muted">${e.who?esc(e.who)+' · ':''}${new Date(e.at).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</div></div>${e.prev!==undefined?`<button class="btn s" data-act="restore" data-id="${e.id}">復原</button>`:''}</li>`).join('')}</ul>`:'<div class="empty">還沒有修改紀錄</div>'}<div class="acts"><button class="btn" data-act="close">關閉</button></div>`)}
+function logSheet(){const nw=new Set(unreadLog().map(e=>e.id));lsSet(seenKey(),Date.now());paintLogDot();openSheet(`<h3>修改紀錄</h3>${nw.size?`<div class="small muted" style="margin-bottom:6px">標「新」的是你上次看完之後，旅伴改的</div>`:''}${LOG.length?`<ul class="log">${LOG.slice(0,40).map(e=>`<li${nw.has(e.id)?' class="new"':''}><div class="t">${nw.has(e.id)?'<span class="newtag">新</span>':''}${esc(e.text)}<div class="small muted">${e.who?esc(e.who)+' · ':''}${new Date(e.at).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</div></div>${e.prev!==undefined?`<button class="btn s" data-act="restore" data-id="${e.id}">復原</button>`:''}</li>`).join('')}</ul>`:'<div class="empty">還沒有修改紀錄</div>'}<div class="acts"><button class="btn" data-act="close">關閉</button></div>`)}
 function voiceList(lang){try{return speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.toLowerCase().startsWith(lang.slice(0,2))&&!NOVELTY.test(v.name))}catch(e){return []}}
 function voiceSheet(){const lang=(App.meta&&App.meta.lang)||'ko-KR',vs=voiceList(lang),cv=(('speechSynthesis' in window)&&pickVoice(lang)||{}).name;
   openSheet(`<h3>語音</h3>${vs.length?`<label class="f">救急卡朗讀用的聲音<select id="voiceSel">${vs.map(v=>`<option ${v.name===cv?'selected':''}>${esc(v.name)}</option>`).join('')}</select></label><div class="btns"><button class="btn m" data-act="voicetest">${ic('sound','s')} 試聽</button></div>`:'<div class="small">這台裝置沒有這個語言的語音。iPhone 可以到「設定 → 輔助使用 → 朗讀內容 → 聲音」下載。</div>'}<div class="acts"><button class="btn" data-act="close">關閉</button></div>`)}
