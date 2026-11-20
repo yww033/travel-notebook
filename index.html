@@ -565,13 +565,13 @@ let fb=null;   // {auth, db}
 function goTrips(){closeTrip();showScreen('trips');renderTrips();
   if(App.mode==='demo'){let list=lsGet('trips');if(!list){const t=buildTrout();if(t){const id='trout';list=[Object.assign({id},t.meta)];DOC_KEYS.forEach(k=>lsSet(`t:${id}:${k}`,t.docs[k]))}else list=[];lsSet('trips',list)}App.trips=list;renderTrips();return}
   if(App.tripsUnsub)App.tripsUnsub();
-  App.tripsUnsub=fb.db.collection('trips').where('members','array-contains',App.user.email).onSnapshot(q=>{App.trips=q.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>(a.start||'').localeCompare(b.start||''));App.tripsLoaded=true;renderTrips();if(!App.autoOpened&&App.trips.length){App.autoOpened=true;const pk=autoPick();if(pk)openTrip(pk)}},e=>{App.tripsLoaded=true;toast('讀不到旅程：'+(e.code||''));renderTrips()})}
+  App.tripsUnsub=fb.db.collection('trips').where('members','array-contains',App.user.email).onSnapshot(q=>{App.trips=q.docs.map(d=>Object.assign({id:d.id},fsDec(d.data()))).sort((a,b)=>(a.start||'').localeCompare(b.start||''));App.tripsLoaded=true;renderTrips();if(!App.autoOpened&&App.trips.length){App.autoOpened=true;const pk=autoPick();if(pk)openTrip(pk)}},e=>{App.tripsLoaded=true;toast('讀不到旅程：'+(e.code||''));renderTrips()})}
 async function createTrip(meta,docs){const id=uid();meta=Object.assign({},meta,{members:Array.from(new Set([...(meta.members||[]),App.user.email].filter(Boolean))),owner:App.user.email,createdAt:Date.now()});
   if(App.mode==='demo'){const list=lsGet('trips')||[];list.push(Object.assign({id},meta));lsSet('trips',list);DOC_KEYS.forEach(k=>lsSet(`t:${id}:${k}`,docs[k]));App.trips=list;renderTrips();return id}
-  const ref=fb.db.collection('trips').doc(id);const bt=fb.db.batch();bt.set(ref,meta);DOC_KEYS.forEach(k=>bt.set(ref.collection('docs').doc(k),docs[k]||blankDocs(meta)[k]));await track(bt.commit());return id}
+  const ref=fb.db.collection('trips').doc(id);const bt=fb.db.batch();bt.set(ref,fsEnc(meta));DOC_KEYS.forEach(k=>bt.set(ref.collection('docs').doc(k),fsEnc(docs[k]||blankDocs(meta)[k])));await track(bt.commit());return id}
 async function saveMeta(meta,text){const prev=clone(App.meta);App.meta=meta;
   if(App.mode==='demo'){const list=lsGet('trips')||[];const i=list.findIndex(t=>t.id===App.tripId);if(i>=0)list[i]=Object.assign({id:App.tripId},meta);lsSet('trips',list)}
-  else track(fb.db.collection('trips').doc(App.tripId).set(meta)).catch(e=>toast('雲端沒有存到'));
+  else track(fb.db.collection('trips').doc(App.tripId).set(fsEnc(meta))).catch(e=>toast('雲端沒有存到'));
   addLog('meta',prev,text);renderAll();loadWeather(true)}
 async function deleteTrip(id){if(App.mode==='demo'){lsSet('trips',(lsGet('trips')||[]).filter(t=>t.id!==id));DOC_KEYS.forEach(k=>{try{localStorage.removeItem(LS+`t:${id}:${k}`)}catch(e){}});goTrips();return}
   const ref=fb.db.collection('trips').doc(id);for(const k of DOC_KEYS){try{await ref.collection('docs').doc(k).delete()}catch(e){}}await ref.delete();goTrips()}
@@ -581,10 +581,10 @@ function openTrip(id){closeTrip();const t=App.trips.find(x=>x.id===id);if(!t)ret
   const ti=todayIdx();if(ti>=0)cur=ti;view=lsGet('view:'+id)||'today';
   if(App.mode==='demo'){DOC_KEYS.forEach(k=>{ST[k]=lsGet(`t:${id}:${k}`)||blankDocs(App.meta)[k]});LOG=lsGet(`t:${id}:log`)||[];migrate();showScreen('app');renderAll();show(view,false);loadWeather();autoFx();return}
   const ref=fb.db.collection('trips').doc(id);showScreen('app');DOC_KEYS.forEach(k=>{ST[k]=blankDocs(App.meta)[k]});renderAll();show(view,false);
-  App.unsub.push(ref.onSnapshot(s=>{if(s.exists){App.meta=s.data();renderTop()}}));
+  App.unsub.push(ref.onSnapshot(s=>{if(s.exists){App.meta=fsDec(s.data());renderTop()}}));
   loadWeather();autoFx();setTimeout(maybeTour,1200);
-  DOC_KEYS.forEach(k=>App.unsub.push(ref.collection('docs').doc(k).onSnapshot(s=>{if(!s.metadata.fromCache)markSynced();const d=s.exists?s.data():blankDocs(App.meta)[k];if(k==='plan'&&(dragging||sheetOpen())){pending.plan=d;return}ST[k]=d;renderAll()},e=>toast('同步失敗：'+(e.code||'')))));
-  App.unsub.push(ref.collection('log').orderBy('at','desc').limit(60).onSnapshot(q=>{LOG=q.docs.map(d=>Object.assign({id:d.id},d.data()));if(view==='tools')renderTools()}))}
+  DOC_KEYS.forEach(k=>App.unsub.push(ref.collection('docs').doc(k).onSnapshot(s=>{if(!s.metadata.fromCache)markSynced();const d=s.exists?fsDec(s.data()):blankDocs(App.meta)[k];if(k==='plan'&&(dragging||sheetOpen())){pending.plan=d;return}ST[k]=d;renderAll()},e=>toast('同步失敗：'+(e.code||'')))));
+  App.unsub.push(ref.collection('log').orderBy('at','desc').limit(60).onSnapshot(q=>{LOG=q.docs.map(d=>Object.assign({id:d.id},fsDec(d.data())));if(view==='tools')renderTools()}))}
 function migrate(){const m=App.meta;let ch=false;if(m.hero==='trout'&&!get('food').photoSeed){writeDoc('food',seedFoodPhotos(clone(get('food'))))}if(!m.country){Object.assign(m,{country:'KR',cur:m.cur||'KRW',lang:'ko-KR',map:'kr'});ch=true}if(m.hero==='trout'){if(!m.loc){m.loc=TROUT_LOC.S;ch=true}const p=get('plan');if(p.days.some(d=>!d.loc)){const np=clone(p);troutLocs(np);writeDoc('plan',np)}}
   const L0=get('lists');if(!L0.v9){const nl=clone(L0);const pt=nl.tabs.find(t=>t.id==='prep')||nl.tabs[0],rt=nl.tabs.find(t=>t.id==='remind');if(rt&&pt&&rt!==pt){pt.groups.push(...rt.groups);nl.tabs=nl.tabs.filter(t=>t!==rt)}nl.tabs.forEach(t=>{if(t.id==='prep'&&t.name==='行前待辦')t.name='待辦';if(t.id==='pack'&&t.name==='行李清單')t.name='行李'});nl.v9=1;writeDoc('lists',nl)}
   const F0=get('food');if(!F0.v9){const nf=clone(F0);nf.items.forEach(f=>{if(f.type==null&&m.hero==='trout')f.type=guessType(f.name);if(!f.recs)f.recs=splitRecs(f.must);delete f.must});const chn=nf.cats.find(c=>c.id==='chain');if(chn&&chn.name==='連鎖・飲料')chn.name='連鎖';nf.v9=1;writeDoc('food',nf)}
@@ -597,7 +597,7 @@ function flushPending(){if(pending.plan){ST.plan=pending.plan;delete pending.pla
 
 /* --- 寫入＋紀錄 --- */
 function writeDoc(k,data){ST[k]=data;if(App.mode==='demo'){lsSet(`t:${App.tripId}:${k}`,data);return}
-  track(fb.db.collection('trips').doc(App.tripId).collection('docs').doc(k).set(data)).catch(e=>toast('雲端沒有存到：'+(e.code||'')))}
+  track(fb.db.collection('trips').doc(App.tripId).collection('docs').doc(k).set(fsEnc(data))).catch(e=>toast('雲端沒有存到：'+(e.code||'')))}
 function commit(k,data,text){const prev=clone(get(k));writeDoc(k,data);addLog(k,prev,text);renderAll();if(k==='plan')setTimeout(()=>loadWeather(true),50)}
 function setKey(k,key,v,text){const d=clone(get(k));if(v)d.m[key]=v;else delete d.m[key];
   if(App.mode==='fb'){const prev=clone(get(k));ST[k]=d;track(fb.db.collection('trips').doc(App.tripId).collection('docs').doc(k).set({m:{[key]:v||firebase.firestore.FieldValue.delete()}},{merge:true})).catch(e=>toast('雲端沒有存到'));addLog(k,prev,text);renderAll()}else commit(k,d,text)}
@@ -605,7 +605,7 @@ function whoName(){return App.mode==='fb'?(App.user.name||App.user.email):(lsGet
 function addLog(k,prev,text){const now=Date.now(),who=whoName(),last=LOG[0];
   if(last&&last.k===k&&['checks','arrive'].includes(k)&&last.who===who&&now-last.at<90000){last.at=now;last.text=text;if(App.mode==='fb')fb.db.collection('trips').doc(App.tripId).collection('log').doc(last.id).update({at:now,text}).catch(()=>{});else lsSet(`t:${App.tripId}:log`,LOG);return}
   const e={id:'l'+now+uid(),at:now,who,text,k,prev};
-  if(App.mode==='fb'){const{id,...rest}=e;fb.db.collection('trips').doc(App.tripId).collection('log').doc(id).set(rest).catch(()=>{});LOG.unshift(e)}else{LOG.unshift(e);LOG=LOG.slice(0,50);lsSet(`t:${App.tripId}:log`,LOG)}}
+  if(App.mode==='fb'){const{id,...rest}=e;fb.db.collection('trips').doc(App.tripId).collection('log').doc(id).set(fsEnc(rest)).catch(()=>{});LOG.unshift(e)}else{LOG.unshift(e);LOG=LOG.slice(0,50);lsSet(`t:${App.tripId}:log`,LOG)}}
 function restore(id){const e=LOG.find(x=>x.id===id);if(!e)return;$('#toast').hidden=true;if(e.k==='meta'){saveMeta(clone(e.prev),'復原：'+e.text)}else commit(e.k,clone(e.prev),'復原：'+e.text);toast('已復原')}
 
 /* --- 照片：示範＝IndexedDB；雲端＝Firestore（壓縮後） --- */
@@ -1162,7 +1162,11 @@ document.documentElement.classList.toggle('calm',lsGet('calm')===1);
 const FB_VER='10.12.2';
 function loadScript(u){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=u;s.onload=res;s.onerror=()=>rej(new Error('load '+u));document.head.appendChild(s)})}
 async function loadFB(){for(const n of ['app','auth','firestore'])await loadScript(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-${n}-compat.js`);
-  firebase.initializeApp(window.FIREBASE_CONFIG);const db=firebase.firestore();try{await db.enablePersistence({synchronizeTabs:true})}catch(e){}fb={auth:firebase.auth(),db}}
+  firebase.initializeApp(window.FIREBASE_CONFIG);const db=firebase.firestore();try{db.settings({ignoreUndefinedProperties:true})}catch(e){}try{await db.enablePersistence({synchronizeTabs:true})}catch(e){}fb={auth:firebase.auth(),db}}
+/* Firestore 不接受「陣列裡面又是陣列」：存之前包成 {__a:[…]}，讀回來再拆開 */
+const isPlain=v=>v&&typeof v==='object'&&Object.getPrototypeOf(v)===Object.prototype;
+function fsEnc(v){if(Array.isArray(v))return v.map(x=>Array.isArray(x)?{__a:fsEnc(x)}:fsEnc(x));if(isPlain(v)){const o={};for(const k in v)o[k]=fsEnc(v[k]);return o}return v}
+function fsDec(v){if(Array.isArray(v))return v.map(fsDec);if(isPlain(v)){const ks=Object.keys(v);if(ks.length===1&&ks[0]==='__a'&&Array.isArray(v.__a))return fsDec(v.__a);const o={};for(const k of ks)o[k]=fsDec(v[k]);return o}return v}
 const inApp=()=>/Line\/|Instagram|FBAN|FBAV|MicroMessenger|KAKAOTALK/i.test(navigator.userAgent);
 function renderLogin(msg){$('#loginbox').innerHTML=`<svg class="logo" viewBox="0 0 40 40" ${SA}>${P.suitcase}</svg><h1>旅行手帳</h1>
   ${inApp()?'<div class="warn2">你是從 LINE／IG 等 App 裡打開的，Google 不允許在這裡登入。請按右上角「⋯」→「用 Safari／瀏覽器開啟」。</div>':''}
