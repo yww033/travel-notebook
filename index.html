@@ -1009,14 +1009,15 @@ async function loadForecast(l){const k='wxf:'+locKey(l),c=lsGet(k);if(c&&Date.no
 async function loadClimate(l){const k='wxc3:'+locKey(l)+':'+App.meta.start+':'+App.meta.days,c=lsGet(k);if(c)return c;
   const n=App.meta.days,y0=+App.meta.start.slice(0,4),lim=addDaysISO(todayISO(),-6),acc=Array.from({length:n},()=>({max:[],min:[],rain:0,snow:0,cnt:0}));
   const cand=[];for(let y=y0-1;y>=y0-6&&cand.length<3;y--){const st=y+App.meta.start.slice(4),en=addDaysISO(st,n-1);if(en<=lim)cand.push([y,st,en])}
-  const res=await Promise.all(cand.map(([y,st,en])=>fetchJSON(`https://archive-api.open-meteo.com/v1/archive?latitude=${l.lat}&longitude=${l.lon}&start_date=${st}&end_date=${en}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,snowfall_sum&timezone=auto`,10000).then(j=>[y,j]).catch(()=>null)));
+  const res=[];for(const [y,st,en] of cand){const u=`https://archive-api.open-meteo.com/v1/archive?latitude=${l.lat}&longitude=${l.lon}&start_date=${st}&end_date=${en}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,snowfall_sum&timezone=auto`;let r=null;
+    for(let t=0;t<3&&!r;t++){if(t)await new Promise(z=>setTimeout(z,1500*t));r=await fetchJSON(u,12000).then(j=>[y,j]).catch(()=>null)}res.push(r)}
   const years=[];res.forEach(r=>{if(!r||!r[1].daily)return;const [y,j]=r,D=j.daily;years.push(y);D.time.forEach((t,i)=>{if(i>=n)return;const a=acc[i];if(D.temperature_2m_max[i]!=null)a.max.push(D.temperature_2m_max[i]);if(D.temperature_2m_min[i]!=null)a.min.push(D.temperature_2m_min[i]);if(D.snowfall_sum[i]>0.2)a.snow++;else if(D.precipitation_sum[i]>1)a.rain++;a.cnt++})});
   if(!years.length)return null;const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
   const out={years,days:acc.map(a=>({max:avg(a.max),min:avg(a.min),snow:a.snow,rain:a.rain,cnt:a.cnt}))};lsSet(k,out);return out}
 async function loadWeather(force){if(!App.meta||wxBusy)return;if(!force&&Date.now()-wxAt<30*6e4&&Object.keys(WX).length)return;wxBusy=true;wxFail=false;const tid=App.tripId;
   const locs={};for(let i=0;i<App.meta.days;i++){const l=dayLoc(i);if(l&&l.lat!=null)locs[locKey(l)]=l}const need=nearTrip();
-  try{await Promise.all(Object.entries(locs).map(async([k,l])=>{const [fc,cl]=await Promise.all([need?loadForecast(l):Promise.resolve(null),loadClimate(l)]);if(App.tripId===tid)WX[k]={fc,cl}}))}finally{wxBusy=false}
-  if(App.tripId!==tid)return;wxAt=Date.now();if(!dragging)renderAll()}
+  let miss=0;try{for(const [k,l] of Object.entries(locs)){const [fc,cl]=await Promise.all([need?loadForecast(l):Promise.resolve(null),loadClimate(l)]);if(App.tripId!==tid)break;WX[k]={fc,cl};if(!cl&&!fc)miss++;if(!dragging)renderAll()}}finally{wxBusy=false}
+  if(App.tripId!==tid)return;wxAt=miss?Date.now()-25*6e4:Date.now();if(!dragging)renderAll()}
 function wxFor(i){const l=dayLoc(i);if(!l)return null;const w=WX[locKey(l)];if(!w)return {loc:l,src:null};const iso=slot(i).iso;
   if(w.fc&&w.fc.daily){const D=w.fc.daily,j=D.time.indexOf(iso);if(j>=0&&D.temperature_2m_max[j]!=null)return {loc:l,src:'fc',code:D.weather_code[j],max:D.temperature_2m_max[j],min:D.temperature_2m_min[j],feel:D.apparent_temperature_min[j],pop:D.precipitation_probability_max[j],rain:D.precipitation_sum[j],snow:D.snowfall_sum[j],wind:D.wind_speed_10m_max[j]}}
   if(w.cl&&w.cl.days[i]&&w.cl.days[i].max!=null){const c=w.cl.days[i];return {loc:l,src:'clim',code:c.snow?71:c.rain>1?61:2,max:c.max,min:c.min,feel:null,snowDays:c.snow,rainDays:c.rain,years:w.cl.years}}
