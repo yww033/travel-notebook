@@ -852,8 +852,8 @@ function renderPrep(){const el=$('#v-prep'),L=get('lists'),st=listStats(),m=get(
 
 /* ========== 更多 ========== */
 function fxText(v){const C=curInfo();if(!v)return fxRev?`${C[0]} 0`:'NT$ 0';return fxRev?`≈ ${C[0]}${Math.round(v/fx()).toLocaleString()}`:`≈ ${twd(v)}`}
-async function autoFx(){const f=get('fx');if(f.manual)return;const today=new Date().toLocaleDateString('zh-TW');if(f.auto&&f.at===today)return;const tid=App.tripId,cu=(App.meta&&App.meta.cur)||'KRW';
-  try{const j=await fetchJSON(`https://open.er-api.com/v6/latest/${cu}`);const r=j&&j.rates&&j.rates.TWD;if(r>0&&App.tripId===tid&&!get('fx').manual){writeDoc('fx',{rate:r,at:today,auto:true});if(!toolSub)renderTools()}}catch(e){}}
+async function autoFx(force){const f=get('fx');if(f.manual&&!force)return;const today=new Date().toLocaleDateString('zh-TW');if(!force&&f.auto&&String(f.at||'').split(' ')[0]===today)return;const tid=App.tripId,cu=(App.meta&&App.meta.cur)||'KRW';
+  try{const j=await fetchJSON(`https://open.er-api.com/v6/latest/${cu}`);const r=j&&j.rates&&j.rates.TWD;if(r>0&&App.tripId===tid&&(force||!get('fx').manual)){const n=new Date(),at=force?today+' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'):today;writeDoc('fx',{rate:r,at,auto:true});if(force)toast(`已更新：${curInfo()[0]}1 ≈ NT$ ${(+r).toFixed(4)}`);if(!toolSub)renderTools()}}catch(e){if(force)toast('更新失敗，請確認有網路再試一次')}}
 function renderTools(){const el=$('#v-tools');if(!el||!App.meta)return;if(toolSub){el.innerHTML=toolPage(toolSub);hydratePics(el);return}
   const kv=$('#fxk')?$('#fxk').value:'',C=curInfo(),f=get('fx');
   el.innerHTML=`<div class="card fxcard"><div class="sec-t">${ic('coin')} 匯率<span class="sub">${fxRev?'台幣 → '+C[1]:C[1]+' → 台幣'}</span></div>
@@ -861,7 +861,7 @@ function renderTools(){const el=$('#v-tools');if(!el||!App.meta)return;if(toolSu
    <div class="fxout" id="fxo">${fxText(num(kv))}</div>
    <div class="chips" style="margin-top:6px">${(fxRev?[100,500,1000,3000,5000]:C[3]).map(n=>`<button class="chip" data-fxq="${n}">${fxRev?'NT$':C[0]}${n.toLocaleString()}</button>`).join('')}</div>
    <div class="small muted">${C[0]}1 ≈ NT$ ${(+f.rate).toFixed(4)} · NT$1 ≈ ${C[0]}${(1/f.rate).toFixed(1)}<br>${f.manual?`用你換到的匯率${f.at?'（'+esc(f.at)+' 設定）':''}`:f.auto?`自動更新：${esc(f.at)}`:'還沒自動更新（需要網路）'}</div>
-   <div class="btns" style="margin-top:8px"><button class="btn s" data-act="fxedit">${ic('pencil','s')} 改成我換到的匯率</button>${f.manual?`<button class="btn s" data-act="fxauto">改回自動</button>`:''}</div></div>
+   <div class="btns" style="margin-top:8px"><button class="btn s y" data-act="fxnow">↻ 更新最新匯率</button><button class="btn s" data-act="fxedit">${ic('pencil','s')} 改成我換到的匯率</button>${f.manual?`<button class="btn s" data-act="fxauto">改回自動</button>`:''}</div></div>
   <div class="quick">${[['ko','救急卡','speak'],['stay','住宿卡','hotel'],['flight','航班','plane'],['prep','準備清單','check'],['tips','須知','bulb'],['links','連結','out']].map(([k,n,i])=>`<button data-act="tool" data-k="${k}"><svg viewBox="0 0 40 40" ${SA}>${P[i]}</svg>${n}</button>`).join('')}</div>`}
 function toolPage(k){const I=get('info'),head=(t,add)=>`<div class="backrow"><button class="iconbtn" data-act="toolback" aria-label="返回">${ic('back')}</button><h2>${t}</h2>${add||''}</div>`,addB=(act,l='新增')=>`<button class="btn s dash" data-act="${act}">${ic('plus','s')} ${l}</button>`;
   if(k==='ko'){const items=get('ko').items,gs=KOG.filter(g=>items.some(x=>(x.g||'其他')===g));return head('救急卡',addB('koedit'))+`<div class="small muted">點卡片會全螢幕大字顯示，直接轉給店員看</div>`+(gs.map(g=>`<div class="gl">${g}</div><div class="rows ko">${items.filter(x=>(x.g||'其他')===g).map(x=>`<div class="k" data-act="kobig" data-id="${x.id}"><div class="small muted">${esc(x.zh)}</div><div class="kr">${esc(x.kr)}</div><div class="btns"><button class="btn s m" data-act="kosay" data-id="${x.id}" ${'speechSynthesis' in window?'':'hidden'}>${ic('sound','s')} 唸</button><button class="btn s" data-act="koedit" data-id="${x.id}" aria-label="編輯">${ic('pencil','s')}</button></div></div>`).join('')}</div>`).join('')||'<div class="empty">還沒有卡片</div>')}
@@ -1120,6 +1120,7 @@ document.addEventListener('click',async e=>{
   case 'fx':toolSub=null;show('tools',true);renderTools();setTimeout(()=>{const k=$('#fxk');k&&k.focus()},80);break;
   case 'fxswap':fxRev=!fxRev;{const k=$('#fxk');if(k)k.value=''}renderTools();break;
   case 'fxedit':fxEdit();break;
+  case 'fxnow':if(!navigator.onLine){toast('沒有網路，連上網路再按');break}toast('更新匯率中…');autoFx(true);break;
   case 'fxauto':{const f=get('fx');writeDoc('fx',{rate:f.rate,at:'',auto:false,manual:false});renderTools();autoFx();toast('改回自動更新');break}
   case 'tool':{const k=a.dataset.k;if(k==='prep'){show('prep',true);renderPrep();break}toolSub=k;renderTools();window.scrollTo(0,0);break}
   case 'toolback':toolSub=null;renderTools();window.scrollTo(0,0);break;
