@@ -583,13 +583,13 @@ async function deleteTrip(id){if(App.mode==='demo'){lsSet('trips',(lsGet('trips'
   const ref=fb.db.collection('trips').doc(id);for(const k of DOC_KEYS){try{await ref.collection('docs').doc(k).delete()}catch(e){}}await ref.delete();goTrips()}
 
 /* --- 打開一個旅程 --- */
-function openTrip(id){closeTrip();const t=App.trips.find(x=>x.id===id);if(!t)return;App.tripId=id;App.meta=clone(t);delete App.meta.id;ST={};LOG=[];if(lsGet(seenKey())==null)lsSet(seenKey(),Date.now());cur=0;Object.keys(WX).forEach(k=>delete WX[k]);wxAt=0;wxFail=false;srchQ='';foodType='all';foodCat=null;toolSub=null;openT.clear();$('#v-eat').innerHTML='';
+function openTrip(id){closeTrip();const t=App.trips.find(x=>x.id===id);if(!t)return;App.tripId=id;App.meta=clone(t);delete App.meta.id;ST={};LOG=[];if(lsGet(seenKey())==null)lsSet(seenKey(),Date.now());cur=0;Object.keys(WX).forEach(k=>delete WX[k]);wxAt=0;wxFail=false;wxSig='';srchQ='';foodType='all';foodCat=null;toolSub=null;openT.clear();$('#v-eat').innerHTML='';
   const ti=todayIdx();if(ti>=0)cur=ti;view=lsGet('view:'+id)||'today';
   if(App.mode==='demo'){DOC_KEYS.forEach(k=>{ST[k]=lsGet(`t:${id}:${k}`)||blankDocs(App.meta)[k]});LOG=lsGet(`t:${id}:log`)||[];migrate();showScreen('app');renderAll();show(view,false);loadWeather();autoFx();return}
   const ref=fb.db.collection('trips').doc(id);showScreen('app');DOC_KEYS.forEach(k=>{ST[k]=blankDocs(App.meta)[k]});renderAll();show(view,false);
   App.unsub.push(ref.onSnapshot(s=>{if(s.exists){App.meta=fsDec(s.data());renderTop()}}));
   loadWeather();autoFx();setTimeout(maybeTour,1200);
-  DOC_KEYS.forEach(k=>App.unsub.push(ref.collection('docs').doc(k).onSnapshot(s=>{if(!s.metadata.fromCache)markSynced();const d=s.exists?fsDec(s.data()):blankDocs(App.meta)[k];if(k==='plan'&&(dragging||sheetOpen())){pending.plan=d;return}ST[k]=d;renderAll()},e=>toast('同步失敗：'+(e.code||'')))));
+  DOC_KEYS.forEach(k=>App.unsub.push(ref.collection('docs').doc(k).onSnapshot(s=>{if(!s.metadata.fromCache)markSynced();const d=s.exists?fsDec(s.data()):blankDocs(App.meta)[k];if(k==='plan'&&(dragging||sheetOpen())){pending.plan=d;return}ST[k]=d;renderAll();if(k==='plan'&&locSig()!==wxSig)loadWeather(true)},e=>toast('同步失敗：'+(e.code||'')))));
   App.unsub.push(ref.collection('log').orderBy('at','desc').limit(60).onSnapshot(q=>{LOG=q.docs.map(d=>Object.assign({id:d.id},fsDec(d.data())));paintLogDot();if(view==='tools')renderTools()}))}
 function migrate(){const m=App.meta;let ch=false;if(m.hero==='trout'&&!get('food').photoSeed){writeDoc('food',seedFoodPhotos(clone(get('food'))))}if(!m.country){Object.assign(m,{country:'KR',cur:m.cur||'KRW',lang:'ko-KR',map:'kr'});ch=true}if(m.hero==='trout'){if(!m.loc){m.loc=TROUT_LOC.S;ch=true}const p=get('plan');if(p.days.some(d=>!d.loc)){const np=clone(p);troutLocs(np);writeDoc('plan',np)}}
   const L0=get('lists');if(!L0.v9){const nl=clone(L0);const pt=nl.tabs.find(t=>t.id==='prep')||nl.tabs[0],rt=nl.tabs.find(t=>t.id==='remind');if(rt&&pt&&rt!==pt){pt.groups.push(...rt.groups);nl.tabs=nl.tabs.filter(t=>t!==rt)}nl.tabs.forEach(t=>{if(t.id==='prep'&&t.name==='行前待辦')t.name='待辦';if(t.id==='pack'&&t.name==='行李清單')t.name='行李'});nl.v9=1;writeDoc('lists',nl)}
@@ -1000,7 +1000,8 @@ try{speechSynthesis.getVoices()}catch(e){}
 function findItem(id){for(const d of get('plan').days){const f=d.items.find(x=>x.id===id);if(f)return f}return null}
 
 /* ========== 天氣：Open-Meteo（免費、不用金鑰）。16 天內用預報，更早用往年同期 ========== */
-const WX={};let wxBusy=false,wxAt=0;
+const WX={};let wxBusy=false,wxAt=0,wxAgain=false,wxSig='';
+const locSig=()=>App.meta?Array.from({length:App.meta.days},(_,i)=>locKey(dayLoc(i))).join('|'):'';
 async function fetchJSON(u,ms=8000){const ac=new AbortController();const t=setTimeout(()=>ac.abort(),ms);try{const r=await fetch(u,{signal:ac.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(t)}}
 const dayLoc=i=>day(i).loc||App.meta.loc||null;
 const locKey=l=>l?(+l.lat).toFixed(2)+','+(+l.lon).toFixed(2):'';
@@ -1014,9 +1015,9 @@ async function loadClimate(l){const k='wxc3:'+locKey(l)+':'+App.meta.start+':'+A
   const years=[];res.forEach(r=>{if(!r||!r[1].daily)return;const [y,j]=r,D=j.daily;years.push(y);D.time.forEach((t,i)=>{if(i>=n)return;const a=acc[i];if(D.temperature_2m_max[i]!=null)a.max.push(D.temperature_2m_max[i]);if(D.temperature_2m_min[i]!=null)a.min.push(D.temperature_2m_min[i]);if(D.snowfall_sum[i]>0.2)a.snow++;else if(D.precipitation_sum[i]>1)a.rain++;a.cnt++})});
   if(!years.length)return null;const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
   const out={years,days:acc.map(a=>({max:avg(a.max),min:avg(a.min),snow:a.snow,rain:a.rain,cnt:a.cnt}))};lsSet(k,out);return out}
-async function loadWeather(force){if(!App.meta||wxBusy)return;if(!force&&Date.now()-wxAt<30*6e4&&Object.keys(WX).length)return;wxBusy=true;wxFail=false;const tid=App.tripId;
+async function loadWeather(force){if(!App.meta)return;if(wxBusy){wxAgain=true;return}if(!force&&Date.now()-wxAt<30*6e4&&Object.keys(WX).length)return;wxBusy=true;wxFail=false;const tid=App.tripId;
   const locs={};for(let i=0;i<App.meta.days;i++){const l=dayLoc(i);if(l&&l.lat!=null)locs[locKey(l)]=l}const need=nearTrip();
-  let miss=0;try{for(const [k,l] of Object.entries(locs)){const [fc,cl]=await Promise.all([need?loadForecast(l):Promise.resolve(null),loadClimate(l)]);if(App.tripId!==tid)break;WX[k]={fc,cl};if(!cl&&!fc)miss++;if(!dragging)renderAll()}}finally{wxBusy=false}
+  let miss=0;try{for(const [k,l] of Object.entries(locs)){const [fc,cl]=await Promise.all([need?loadForecast(l):Promise.resolve(null),loadClimate(l)]);if(App.tripId!==tid)break;WX[k]={fc,cl};if(!cl&&!fc)miss++;if(!dragging)renderAll()}}finally{wxBusy=false;wxSig=locSig();if(wxAgain){wxAgain=false;setTimeout(()=>loadWeather(true),50)}}
   if(App.tripId!==tid)return;wxAt=miss?Date.now()-25*6e4:Date.now();if(!dragging)renderAll()}
 function wxFor(i){const l=dayLoc(i);if(!l)return null;const w=WX[locKey(l)];if(!w)return {loc:l,src:null};const iso=slot(i).iso;
   if(w.fc&&w.fc.daily){const D=w.fc.daily,j=D.time.indexOf(iso);if(j>=0&&D.temperature_2m_max[j]!=null)return {loc:l,src:'fc',code:D.weather_code[j],max:D.temperature_2m_max[j],min:D.temperature_2m_min[j],feel:D.apparent_temperature_min[j],pop:D.precipitation_probability_max[j],rain:D.precipitation_sum[j],snow:D.snowfall_sum[j],wind:D.wind_speed_10m_max[j]}}
