@@ -567,17 +567,45 @@ const IS_PUBLIC=true;
 let ST={};let LOG=[];
 const get=k=>ST[k]||(ST[k]=blankDocs(App.meta||{days:1})[k]);
 let fb=null;   // {auth, db}
+/* --- 權限：管理員、建立者、只能看 --- */
+const myEmail=()=>((App.user&&App.user.email)||'').toLowerCase();
+const isRO=()=>App.mode==='fb'&&!!App.tripId&&!!App.meta&&!(App.meta.members||[]).map(x=>String(x).toLowerCase()).includes(myEmail());
+const canManage=()=>App.mode==='fb'&&!!App.meta&&(!!App.isAdmin||String(App.meta.owner||'').toLowerCase()===myEmail());
+let roAt=0;function roBlock(){if(!isRO())return false;if(Date.now()-roAt>2500){roAt=Date.now();toast('這個旅程你是「只能看」，不能修改')}setTimeout(()=>{if(App.tripId)renderAll()},0);return true}
+function checkAdmin(){App.isAdmin=false;App.accessSeeded=false;fb.db.collection('config').doc('adminProbe').get().then(()=>{App.isAdmin=true;renderTrips();maybeSeedAccess()}).catch(()=>{})}
+/* 第一次啟用：把現有旅程裡的成員放進帳號名單，避免旅伴被擋在門外 */
+async function maybeSeedAccess(){if(!App.isAdmin||!App.tripsLoaded||App.accessSeeded)return;App.accessSeeded=true;
+  try{const ref=fb.db.collection('config').doc('access');const s=await ref.get();if(s.exists)return;const em=new Set();App.trips.forEach(t=>[...(t.members||[]),...(t.viewers||[])].forEach(x=>em.add(String(x).toLowerCase())));em.delete(myEmail());await ref.set({emails:[...em]});toast(`帳號名單建立好了：${em.size} 個人可以登入`)}catch(e){App.accessSeeded=false}}
+/* 旅程加人時，同步到帳號名單（管理員直接加；其他人只提醒） */
+async function syncAccess(emails){emails=Array.from(new Set(emails.map(x=>String(x).toLowerCase()))).filter(x=>x&&x!==myEmail());if(!emails.length||App.mode!=='fb')return;
+  try{const ref=fb.db.collection('config').doc('access');if(App.isAdmin){await ref.set({emails:firebase.firestore.FieldValue.arrayUnion(...emails)},{merge:true});return}
+    const s=await ref.get();const have=(s.exists&&s.data().emails)||[];const miss=emails.filter(x=>!have.includes(x));if(miss.length)toast(`${miss.join('、')} 還不能登入，請管理員到「管理帳號」加入`)}catch(e){}}
+async function accessSheet(){let list=[];try{const s=await fb.db.collection('config').doc('access').get();list=((s.exists&&s.data().emails)||[]).slice().sort()}catch(e){toast('讀不到帳號名單：'+(e.code||''));return}
+  const tripsOf=e=>App.trips.filter(t=>(t.members||[]).includes(e)||(t.viewers||[]).includes(e)).map(t=>t.name+((t.members||[]).includes(e)?'':'（只能看）'));
+  openSheet(`<h3>管理帳號</h3><p class="small muted">名單上的 Google 帳號才能登入手帳。要讓他看到某個旅程，還要到那個旅程的「旅程設定」加他（在旅程設定加的人，也會自動加進這裡）。</p>
+  <div class="small" style="margin-bottom:6px">管理員：${esc(myEmail())}（你）</div>
+  ${list.length?`<ul class="log">${list.map(e=>{const ts=tripsOf(e);return `<li><div class="t">${esc(e)}<div class="small muted">${ts.length?esc(ts.join('、')):'還沒加入任何旅程'}</div></div><button class="btn s" data-rmacc="${esc(e)}">移除</button></li>`}).join('')}</ul>`:'<div class="empty">名單是空的，目前只有你能登入。</div>'}
+  <label class="f">新增 Google 帳號（可以一次貼好幾個，用逗號分開）<input id="accNew" type="email" placeholder="例如：friend@gmail.com" autocapitalize="off" autocomplete="off"></label>
+  <div class="acts"><button class="btn" data-act="close">關閉</button><button class="btn y" id="accAdd">加入</button></div>`,sh=>{
+    sh.querySelector('#accAdd').onclick=async()=>{const v=splitList(sh.querySelector('#accNew').value).map(x=>x.toLowerCase()).filter(x=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));if(!v.length){toast('請輸入正確的 Gmail');return}
+      try{await fb.db.collection('config').doc('access').set({emails:firebase.firestore.FieldValue.arrayUnion(...v)},{merge:true});toast('已加入，他現在可以登入了');accessSheet()}catch(e){toast('沒有存到：'+(e.code||''))}};
+    sh.querySelectorAll('[data-rmacc]').forEach(b=>b.onclick=async()=>{const e=b.dataset.rmacc;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='確定移除？';b.classList.add('c');return}
+      try{await fb.db.collection('config').doc('access').update({emails:firebase.firestore.FieldValue.arrayRemove(e)});toast('已移除，他之後就登入不了');accessSheet()}catch(err){toast('沒有存到：'+(err.code||''))}})})}
 
 
 /* --- 旅程清單 --- */
 function goTrips(){closeTrip();showScreen('trips');renderTrips();
   if(App.mode==='demo'){let list=lsGet('trips');if(!list){const t=buildTrout();if(t){const id='trout';list=[Object.assign({id},t.meta)];DOC_KEYS.forEach(k=>lsSet(`t:${id}:${k}`,t.docs[k]))}else list=[];lsSet('trips',list)}App.trips=list;renderTrips();return}
   if(App.tripsUnsub)App.tripsUnsub();
-  App.tripsUnsub=fb.db.collection('trips').where('members','array-contains',App.user.email).onSnapshot(q=>{App.trips=q.docs.map(d=>Object.assign({id:d.id},fsDec(d.data()))).sort((a,b)=>(a.start||'').localeCompare(b.start||''));App.tripsLoaded=true;renderTrips();if(!App.autoOpened&&App.trips.length){App.autoOpened=true;const pk=autoPick();if(pk)openTrip(pk)}},e=>{App.tripsLoaded=true;toast('讀不到旅程：'+(e.code||''));renderTrips()})}
+  App.tripsUnsub=listenTrips()}
+function listenTrips(){const R={m:[],v:[]};let gotM=false;
+  const done=()=>{const map=new Map();[...R.v,...R.m].forEach(t=>map.set(t.id,t));App.trips=[...map.values()].sort((a,b)=>(a.start||'').localeCompare(b.start||''));App.tripsLoaded=true;renderTrips();maybeSeedAccess();if(!App.autoOpened&&App.trips.length){App.autoOpened=true;const pk=autoPick();if(pk)openTrip(pk)}};
+  const q=(f,key)=>fb.db.collection('trips').where(f,'array-contains',App.user.email).onSnapshot(s=>{R[key]=s.docs.map(d=>Object.assign({id:d.id},fsDec(d.data())));if(key==='m')gotM=true;if(gotM)done()},e=>{if(key==='v')return;App.tripsLoaded=true;toast('讀不到旅程：'+(e.code||''));renderTrips()});
+  const u1=q('members','m'),u2=q('viewers','v');return()=>{u1();u2()}}
 async function createTrip(meta,docs){const id=uid();meta=Object.assign({},meta,{members:Array.from(new Set([...(meta.members||[]),App.user.email].filter(Boolean))),owner:App.user.email,createdAt:Date.now()});
   if(App.mode==='demo'){const list=lsGet('trips')||[];list.push(Object.assign({id},meta));lsSet('trips',list);DOC_KEYS.forEach(k=>lsSet(`t:${id}:${k}`,docs[k]));App.trips=list;renderTrips();return id}
-  const ref=fb.db.collection('trips').doc(id);const bt=fb.db.batch();bt.set(ref,fsEnc(meta));DOC_KEYS.forEach(k=>bt.set(ref.collection('docs').doc(k),fsEnc(docs[k]||blankDocs(meta)[k])));await track(bt.commit());return id}
-async function saveMeta(meta,text){const prev=clone(App.meta);App.meta=meta;
+  syncAccess(meta.members);const ref=fb.db.collection('trips').doc(id);const bt=fb.db.batch();bt.set(ref,fsEnc(meta));DOC_KEYS.forEach(k=>bt.set(ref.collection('docs').doc(k),fsEnc(docs[k]||blankDocs(meta)[k])));await track(bt.commit());return id}
+async function saveMeta(meta,text){if(roBlock())return;const prev=clone(App.meta);App.meta=meta;
   if(App.mode==='demo'){const list=lsGet('trips')||[];const i=list.findIndex(t=>t.id===App.tripId);if(i>=0)list[i]=Object.assign({id:App.tripId},meta);lsSet('trips',list)}
   else track(fb.db.collection('trips').doc(App.tripId).set(fsEnc(meta))).catch(e=>toast('雲端沒有存到'));
   addLog('meta',prev,text);renderAll();loadWeather(true)}
@@ -604,10 +632,10 @@ const pending={};
 function flushPending(){if(pending.plan){ST.plan=pending.plan;delete pending.plan;renderAll()}}
 
 /* --- 寫入＋紀錄 --- */
-function writeDoc(k,data){ST[k]=data;if(App.mode==='demo'){lsSet(`t:${App.tripId}:${k}`,data);return}
+function writeDoc(k,data){if(isRO())return;ST[k]=data;if(App.mode==='demo'){lsSet(`t:${App.tripId}:${k}`,data);return}
   track(fb.db.collection('trips').doc(App.tripId).collection('docs').doc(k).set(fsEnc(data))).catch(e=>toast('雲端沒有存到：'+(e.code||'')))}
-function commit(k,data,text){const prev=clone(get(k));writeDoc(k,data);addLog(k,prev,text);renderAll();if(k==='plan')setTimeout(()=>loadWeather(true),50)}
-function setKey(k,key,v,text){const d=clone(get(k));if(v)d.m[key]=v;else delete d.m[key];
+function commit(k,data,text){if(roBlock())return;const prev=clone(get(k));writeDoc(k,data);addLog(k,prev,text);renderAll();if(k==='plan')setTimeout(()=>loadWeather(true),50)}
+function setKey(k,key,v,text){if(roBlock())return;const d=clone(get(k));if(v)d.m[key]=v;else delete d.m[key];
   if(App.mode==='fb'){const prev=clone(get(k));ST[k]=d;track(fb.db.collection('trips').doc(App.tripId).collection('docs').doc(k).set({m:{[key]:v||firebase.firestore.FieldValue.delete()}},{merge:true})).catch(e=>toast('雲端沒有存到'));addLog(k,prev,text);renderAll()}else commit(k,d,text)}
 function whoName(){return App.mode==='fb'?(App.user.name||App.user.email):(lsGet('who')||'')}
 /* 對方更新提示：記住我上次看修改紀錄的時間，之後別人改的就算新的 */
@@ -616,7 +644,7 @@ const myBy=()=>App.mode==='fb'&&App.user?App.user.email:'';
 const isMine=e=>e.by?e.by===myBy():(e.who||'')===whoName();
 function unreadLog(){const seen=+(lsGet(seenKey())||0);return LOG.filter(e=>e.at>seen&&(e.by||e.who)&&!isMine(e))}
 function paintLogDot(){const g=$('#gearBtn');if(g)g.classList.toggle('dot',!!App.tripId&&unreadLog().length>0)}
-function addLog(k,prev,text){const now=Date.now(),who=whoName(),last=LOG[0];
+function addLog(k,prev,text){if(isRO())return;const now=Date.now(),who=whoName(),last=LOG[0];
   if(last&&last.k===k&&['checks','arrive'].includes(k)&&last.who===who&&now-last.at<90000){last.at=now;last.text=text;if(App.mode==='fb')fb.db.collection('trips').doc(App.tripId).collection('log').doc(last.id).update({at:now,text}).catch(()=>{});else lsSet(`t:${App.tripId}:log`,LOG);return}
   const e={id:'l'+now+uid(),at:now,who,by:myBy(),text,k,prev};
   if(App.mode==='fb'){const{id,...rest}=e;fb.db.collection('trips').doc(App.tripId).collection('log').doc(id).set(fsEnc(rest)).catch(()=>{});LOG.unshift(e)}else{LOG.unshift(e);LOG=LOG.slice(0,50);lsSet(`t:${App.tripId}:log`,LOG)}}
@@ -655,7 +683,7 @@ function rmPhoto(g,k){const [t,a,b]=g.split(':');
 function loadImgFile(file){return new Promise(res=>{const url=URL.createObjectURL(file);const img=new Image();let done=false;const fin=v=>{if(!done){done=true;res(v)}};img.onload=()=>fin(img);img.onerror=()=>fin(null);setTimeout(()=>fin(img.naturalWidth?img:null),8000);img.src=url})}
 async function shrink(file,max){try{const img=await loadImgFile(file);if(!img||!img.naturalWidth)return null;const url=img.src;const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);return c}catch(e){return null}}
 async function addPhotos(di,w,files){const ids=await storeFiles(files);if(!ids.length)return;const o=clone(get('ootd'));const key='d'+di;o[key]=o[key]||{};o[key][w]=(o[key][w]||[]).concat(ids);commit('ootd',o,`${slot(di).md} ${w==='album'?'當天照片':w+' OOTD'} 加了 ${ids.length} 張`);toast(`已加入 ${ids.length} 張照片`)}
-async function addPhoto(di,w,file){const c=await shrink(file,App.mode==='fb'?900:1280);if(!c){toast('這張照片讀不出來');return}const id='ph'+uid();
+async function addPhoto(di,w,file){if(roBlock())return;const c=await shrink(file,App.mode==='fb'?900:1280);if(!c){toast('這張照片讀不出來');return}const id='ph'+uid();
   try{if(App.mode==='fb'){const data=c.toDataURL('image/jpeg',.72);await fb.db.collection('trips').doc(App.tripId).collection('photos').doc(id).set({data,at:Date.now()});PHOTO[id]=data}
     else{const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.82));MEMPH[id]=blob;try{await idb.put(id,blob)}catch(e){}}
     const o=clone(get('ootd'));const key='d'+di;o[key]=o[key]||{};o[key][w]=(o[key][w]||[]).concat([id]);commit('ootd',o,`${slot(di).md} ${w} 上傳 OOTD`);toast('照片已存')}catch(e){console.warn(e);toast('照片存不進去')}}
@@ -692,10 +720,10 @@ function show(v,anim){if(!ALLV.includes(v))v='today';if(v==='prep'&&view!=='prep
 /* ========== 登入頁、旅程選單 ========== */
 function tripSE(t){const s=new Date(t.departAt||t.start+'T00:00:00+08:00');let e;if(t.returnAt)e=new Date(t.returnAt);else{e=new Date(t.start+'T23:59:00+08:00');e.setDate(e.getDate()+(t.days||1)-1)}return [s,e]}
 function autoPick(){const n=Date.now();const L=App.trips.map(t=>[t,...tripSE(t)]);const dur=L.find(x=>x[1]<=n&&n<=x[2]);if(dur)return dur[0].id;const up=L.filter(x=>x[1]>n).sort((a,b)=>a[1]-b[1])[0];if(up)return up[0].id;const past=L.sort((a,b)=>b[2]-a[2])[0];return past&&past[0].id}
-function renderTrips(){const box=$('#triplist');if(!box)return;$('#whoami').innerHTML=App.mode==='fb'?`已登入：${esc(App.user.email)}　<button class="btn s" data-act="logout">登出</button>`:esc(CAN_SAVE?(location.protocol==='file:'?'本機預覽版：資料只存在這台電腦的瀏覽器，用來確認功能和版型。正式使用請用線上網址登入。':'資料目前只存在這台裝置的瀏覽器。'):'注意：這個瀏覽器不允許存資料，修改只會保留到關掉分頁。');
+function renderTrips(){const box=$('#triplist');if(!box)return;$('#whoami').innerHTML=App.mode==='fb'?`已登入：${esc(App.user.email)}　<button class="btn s" data-act="logout">登出</button>${App.isAdmin?' <button class="btn s y" data-act="access">管理帳號</button>':''}`:esc(CAN_SAVE?(location.protocol==='file:'?'本機預覽版：資料只存在這台電腦的瀏覽器，用來確認功能和版型。正式使用請用線上網址登入。':'資料目前只存在這台裝置的瀏覽器。'):'注意：這個瀏覽器不允許存資料，修改只會保留到關掉分頁。');
   const n=Date.now(),L=App.trips.map(t=>({t,se:tripSE(t)}));const dur=L.filter(x=>x.se[0]<=n&&n<=x.se[1]),up=L.filter(x=>x.se[0]>n).sort((a,b)=>a.se[0]-b.se[0]),past=L.filter(x=>x.se[1]<n).sort((a,b)=>b.se[1]-a.se[1]);
   const card=({t,se})=>{const st=se[0]>n?`還有 ${Math.floor((se[0]-n)/864e5)} 天`:n<=se[1]?`旅行中第 ${Math.floor((n-se[0])/864e5)+1} 天`:'已結束';
-    return `<button class="card tripcard" data-act="open" data-id="${esc(t.id)}"><div class="ic" style="background:var(--mizu-l)"><svg viewBox="0 0 40 40" ${SA}>${P[t.icon]||(t.hero==='trout'?P.fish:P.suitcase)}</svg></div><div style="min-width:0"><h2>${esc(t.name)}</h2><div class="small muted">${esc(t.start||'')} 起 ${t.days||''} 天${t.sub?' · '+esc(t.sub):''}</div><span class="pill" style="display:inline-block;margin-top:4px${se[1]<n?';background:var(--paper)':''}">${st}</span></div>${ic('back').replace('M24 8L12 20l12 12','M16 8l12 12-12 12')}</button>`};
+    return `<button class="card tripcard" data-act="open" data-id="${esc(t.id)}"><div class="ic" style="background:var(--mizu-l)"><svg viewBox="0 0 40 40" ${SA}>${P[t.icon]||(t.hero==='trout'?P.fish:P.suitcase)}</svg></div><div style="min-width:0"><h2>${esc(t.name)}</h2><div class="small muted">${esc(t.start||'')} 起 ${t.days||''} 天${t.sub?' · '+esc(t.sub):''}${App.mode==='fb'&&!(t.members||[]).includes(myEmail())?' · 只能看':''}</div><span class="pill" style="display:inline-block;margin-top:4px${se[1]<n?';background:var(--paper)':''}">${st}</span></div>${ic('back').replace('M24 8L12 20l12 12','M16 8l12 12-12 12')}</button>`};
   box.innerHTML=(dur.map(card).join('')+up.map(card).join('')||(past.length?'':(App.mode==='fb'&&!App.tripsLoaded?'<div class="empty">讀取中…</div>':`<div class="empty">${App.mode==='fb'?`目前登入的是 <b>${esc((App.user&&App.user.email)||'')}</b>，這個帳號還沒有旅程。<br>第一次使用：按下面的「匯入資料檔」。<br>用錯帳號：按上面的「登出」，換另一個 Gmail。<br>被邀請的人：請對方到「旅程設定」加入這個 Gmail。`:'還沒有旅程。可以直接用整理好的「鱒魚遊戲」，或新增一個空白旅程。'}</div>`)))+
    (past.length?`<details class="acc"><summary>已結束（${past.length}）</summary><div class="bd">${past.map(card).join('')}</div></details>`:'')+
    `<button class="btn big y" data-act="newtrip">${ic('plus')} 新增旅程</button><button class="btn big" data-act="importbk">${ic('note')} 匯入資料檔（.json）</button>${IS_PUBLIC||App.mode==='fb'||App.trips.some(t=>t.hero==='trout')?'':`<button class="btn big" data-act="importtrout">${ic('fish')} 匯入「鱒魚遊戲」行程</button>`}`}
@@ -711,7 +739,7 @@ function newTripSheet(){form({title:'新增旅程',fields:[{k:'name',l:'旅程�
 const splitList=s=>String(s||'').split(/[,，、\s]+/).map(x=>x.trim()).filter(Boolean);
 
 /* ========== 頂部＋底部 ========== */
-function renderTop(){if(!App.meta)return;$('#tripTitle').textContent=App.meta.name;$('#backBtn').innerHTML=ic('back');$('#gearBtn').innerHTML=ic('gear');paintLogDot()}
+function renderTop(){if(!App.meta)return;$('#tripTitle').textContent=App.meta.name+(isRO()?'（只能看）':'');$('#backBtn').innerHTML=ic('back');$('#gearBtn').innerHTML=ic('gear');paintLogDot()}
 function renderNav(){$('#bnav').innerHTML=VIEWS.map(([k,n,i])=>k==='add'?`<button class="plusb" data-act="quick" aria-label="隨手記一筆"><span class="pc"><svg viewBox="0 0 40 40" ${SA}>${P.plus}</svg></span></button>`:`<button class="${view===k?'on':''}" data-act="view" data-v="${k}"><svg viewBox="0 0 40 40" ${SA}>${P[i]}</svg><span>${n}</span></button>`).join('')}
 
 /* ========== 今天 ========== */
@@ -878,7 +906,7 @@ function hotelBig(st){if(!st||(!st.addr&&!st.kr)){toast('還沒填住宿資料')
   d.innerHTML=`<div><div class="muted">請載我到這裡（給司機看）</div><div class="kr">${esc(st.kr||st.name)}</div>${st.addr?`<div class="sub2">${esc(st.addr)}</div>`:''}${st.tel?`<div class="sub2">電話 ${esc(st.tel)}</div>`:''}<div class="acts2"><a class="btn big m" href="${esc(st.naver||navTo(st.kr||st.addr))}" target="_blank" rel="noopener">${ic('nav')} 導航回飯店</a>${st.tel?`<a class="btn big" href="tel:${esc(st.tel.replace(/[^\d+]/g,''))}">打電話</a>`:''}</div><p class="muted">點空白處關閉</p></div>`;
   d.onclick=e=>{if(!e.target.closest('a'))d.remove()};document.body.appendChild(d)}
 function gearSheet(){openSheet(`<h3>設定</h3><div class="rows">
-  <button class="btn big" data-act="tripedit">${ic('pencil')} 旅程設定（名稱、日期、天氣地點）</button>
+  ${isRO()?'<div class="small muted">這個旅程你是「只能看」，想修改請找建立旅程的人。</div>':`<button class="btn big" data-act="tripedit">${ic('pencil')} 旅程設定（名稱、日期、天氣地點${canManage()?'、成員':''}）</button>`}
   <button class="btn big" data-act="logsheet">${ic('note')} 修改紀錄${unreadLog().length?`<span class="ndot" aria-label="有新的更新"></span><span class="small">${unreadLog().length} 筆新的</span>`:''}</button>
   <button class="btn big" data-act="voicesheet">${ic('sound')} 語音</button>
   <button class="btn big" data-act="tour">${ic('star')} 操作教學</button>
@@ -887,7 +915,7 @@ function gearSheet(){openSheet(`<h3>設定</h3><div class="rows">
   ${App.mode==='demo'?`<label class="f">我是誰（修改紀錄會顯示）<select id="whoSel"><option value="">未選</option>${people().map(p=>`<option ${lsGet('who')===p?'selected':''}>${esc(p)}</option>`).join('')}</select></label>`:''}
   <label class="cb"><input type="checkbox" id="calm" ${calm()?'checked':''}> 減少動態效果</label>
   <div class="small muted">${App.mode==='fb'?'資料存在雲端，你和旅伴看到的是同一份；沒訊號時會先存在手機，有網路再上傳。':CAN_SAVE?'資料目前只存在這台裝置的瀏覽器裡，清除瀏覽器資料會不見。':'這個瀏覽器不允許存資料，修改只會保留到關掉分頁。'}</div>
-  <div class="acts"><button class="btn c" data-act="deltrip">${ic('trash','s')} 刪除這個旅程</button><button class="btn" data-act="close">關閉</button></div>`)}
+  <div class="acts">${App.mode!=='fb'||canManage()?`<button class="btn c" data-act="deltrip">${ic('trash','s')} 刪除這個旅程</button>`:''}<button class="btn" data-act="close">關閉</button></div>`)}
 function logSheet(){const nw=new Set(unreadLog().map(e=>e.id));lsSet(seenKey(),Date.now());paintLogDot();openSheet(`<h3>修改紀錄</h3>${nw.size?`<div class="small muted" style="margin-bottom:6px">標「新」的是你上次看完之後，旅伴改的</div>`:''}${LOG.length?`<ul class="log">${LOG.slice(0,40).map(e=>`<li${nw.has(e.id)?' class="new"':''}><div class="t">${nw.has(e.id)?'<span class="newtag">新</span>':''}${esc(e.text)}<div class="small muted">${e.who?esc(e.who)+' · ':''}${new Date(e.at).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</div></div>${e.prev!==undefined?`<button class="btn s" data-act="restore" data-id="${e.id}">復原</button>`:''}</li>`).join('')}</ul>`:'<div class="empty">還沒有修改紀錄</div>'}<div class="acts"><button class="btn" data-act="close">關閉</button></div>`)}
 function voiceList(lang){try{return speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.toLowerCase().startsWith(lang.slice(0,2))&&!NOVELTY.test(v.name))}catch(e){return []}}
 function voiceSheet(){const lang=(App.meta&&App.meta.lang)||'ko-KR',vs=voiceList(lang),cv=(('speechSynthesis' in window)&&pickVoice(lang)||{}).name;
@@ -907,7 +935,7 @@ function renderAll(){if(!App.meta||$('#app').hidden&&!App.tripId)return;renderTo
 function openSheet(html,mount){$('#sheetroot').innerHTML=`<div class="scrim" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true"><div class="in">${html}</div></div>`;mount&&mount($('#sheetroot .sheet'))}
 function closeSheet(){$('#sheetroot').innerHTML='';flushPending()}
 const LOCSEL={},PHSEL={},RECSEL={};
-function form({title,fields,data={},onSave,onDelete,note}){let sure=false;const F=fields.filter(f=>!f.hide);
+function form({title,fields,data={},onSave,onDelete,note}){if(App.tripId&&roBlock())return;let sure=false;const F=fields.filter(f=>!f.hide);
   const field=f=>{const v=data[f.k];switch(f.type){
     case 'ta':return `<label class="f">${f.l}<textarea id="ff_${f.k}" placeholder="${esc(f.ph||'')}">${esc(v||'')}</textarea>${f.hint?`<span class="hint">${f.hint}</span>`:''}</label>`;
     case 'cb':return `<label class="cb"><input type="checkbox" id="ff_${f.k}" ${v?'checked':''}> ${f.l}</label>`;
@@ -986,10 +1014,10 @@ function editInfo(part,id){const I=clone(get('info'));
       onDelete:j!=null?()=>{I.stays.splice(j,1);commit('info',I,`住宿：刪除「${st.name}」`)}:null});return}
   if(part==='links'){form({title:'編輯參考連結',data:{l:(I.links||[]).map(l=>l.join(' | ')).join('\n')},fields:[{k:'l',l:'連結（一行一個）',type:'ta',hint:'格式：名稱 | 網址'}],onSave:v=>{I.links=v.l.split('\n').map(l=>l.split('|').map(x=>x.trim())).filter(r=>r[0]&&r[1]);commit('info',I,'修改參考連結')}})}}
 const TRIP_ICONS=[['','行李箱（預設）'],['zombie','殭屍'],['pirate','海盜帽'],['fish','鱒魚'],['plane','飛機'],['palace','宮殿'],['wave','海邊'],['tower','高塔'],['tree','森林'],['mount','山']];
-function editTrip(){const m=App.meta;form({title:'旅程設定',note:'天數變少時，多出來那幾天的行程會被移除（可在編輯紀錄復原）。',data:Object.assign({},m,{people:(m.people||[]).join(', '),members:(m.members||[]).join(', ')}),
-  fields:[{k:'name',l:'旅程名稱'},{k:'sub',l:'地區'},{k:'country',l:'國家（決定地圖、語音、時區）',type:'select',opts:Object.entries(COUNTRY).map(([k,v])=>[k,v.n])},{k:'cur',l:'當地幣別',type:'select',opts:Object.entries(CUR).map(([k,v])=>[k,v[1]+' '+v[0]])},{k:'loc',l:'天氣預設地點',type:'loc'},{k:'start',l:'出發日期',type:'date'},{k:'days',l:'天數',type:'num'},{k:'people',l:'同行的人（逗號分開，OOTD 會用到）'},{k:'icon',l:'旅程列表的圖示',type:'select',opts:TRIP_ICONS},{k:'members',l:'可以看到這個旅程的 Google 帳號（逗號分開）',hide:App.mode!=='fb'}],
+function editTrip(){const m=App.meta;form({title:'旅程設定',note:'天數變少時，多出來那幾天的行程會被移除（可在編輯紀錄復原）。',data:Object.assign({},m,{people:(m.people||[]).join(', '),members:(m.members||[]).join(', '),viewers:(m.viewers||[]).join(', ')}),
+  fields:[{k:'name',l:'旅程名稱'},{k:'sub',l:'地區'},{k:'country',l:'國家（決定地圖、語音、時區）',type:'select',opts:Object.entries(COUNTRY).map(([k,v])=>[k,v.n])},{k:'cur',l:'當地幣別',type:'select',opts:Object.entries(CUR).map(([k,v])=>[k,v[1]+' '+v[0]])},{k:'loc',l:'天氣預設地點',type:'loc'},{k:'start',l:'出發日期',type:'date'},{k:'days',l:'天數',type:'num'},{k:'people',l:'同行的人（逗號分開，OOTD 會用到）'},{k:'icon',l:'旅程列表的圖示',type:'select',opts:TRIP_ICONS},{k:'members',l:'可以編輯的 Google 帳號（逗號分開，自己會自動加入）',hide:!canManage()},{k:'viewers',l:'只能看的 Google 帳號（逗號分開；看得到行程，但不能修改）',hide:!canManage()}],
   onSave:async v=>{const n=Math.max(1,Math.min(30,parseInt(v.days)||m.days));const nm=Object.assign({},m,{name:v.name||m.name,sub:v.sub,start:v.start||m.start,days:n,people:splitList(v.people),loc:v.loc,cur:v.cur,icon:v.icon||''});if(v.country!==m.country){const P0=COUNTRY[v.country];Object.assign(nm,{country:v.country,lang:P0.lang,map:P0.map,tz:P0.tz})}
-    if(v.cur!==m.cur){commit('fx',{rate:CUR[v.cur][2],at:''},`幣別改成${CUR[v.cur][1]}`);toast('幣別改了，記得到匯率換算更新匯率')}if(App.mode==='fb'){nm.members=Array.from(new Set([...splitList(v.members).map(s=>s.toLowerCase()),App.user.email]))}
+    if(v.cur!==m.cur){commit('fx',{rate:CUR[v.cur][2],at:''},`幣別改成${CUR[v.cur][1]}`);toast('幣別改了，記得到匯率換算更新匯率')}if(canManage()){nm.members=Array.from(new Set([...splitList(v.members).map(s=>s.toLowerCase()),myEmail()]));nm.viewers=Array.from(new Set(splitList(v.viewers).map(s=>s.toLowerCase()))).filter(x=>!nm.members.includes(x));syncAccess([...nm.members,...nm.viewers])}
     if(n!==m.days){const np=clone(get('plan'));while(np.days.length<n)np.days.push({id:'c'+uid(),icon:'cal',area:'',theme:`第 ${np.days.length+1} 天`,tip:'',areas:[],items:[],planB:null});np.days=np.days.slice(0,n);commit('plan',np,`天數改成 ${n} 天`)}
     if(nm.start!==m.start){delete nm.departAt;delete nm.returnAt}
     await saveMeta(nm,'修改旅程設定')},
@@ -1058,9 +1086,10 @@ document.addEventListener('click',async e=>{
   case 'trips':closeSheet();goTrips();break;
   case 'open':openTrip(id);break;
   case 'newtrip':newTripSheet();break;
+  case 'access':accessSheet();break;
   case 'importtrout':{const t=buildTrout();const nid2=await createTrip(t.meta,t.docs);toast('已匯入鱒魚遊戲');if(App.mode==='demo')openTrip(nid2);break}
   case 'view':if(a.dataset.v==='tools')toolSub=null;show(a.dataset.v,true);if(a.dataset.v==='tools')renderTools();break;
-  case 'quick':quickSheet();break;
+  case 'quick':if(roBlock())break;quickSheet();break;
   case 'q':{closeSheet();const k=a.dataset.k;if(k==='food')editFood(null,'',true);else if(k==='shop')shopEdit(null,true);else if(k==='pool')poolEdit(null,true);else{const L=get('lists');prepTab=(L.tabs[0]||{}).id;editLItem(null,null)}break}
   case 'gear':gearSheet();break;
   case 'syncinfo':syncSheet();break;
@@ -1072,7 +1101,7 @@ document.addEventListener('click',async e=>{
   case 'logsheet':logSheet();break;
   case 'voicesheet':voiceSheet();break;
   case 'voicetest':{const k=get('ko').items[0];say(k?k.kr:'안녕하세요');break}
-  case 'deltrip':confirmDeleteTrip();break;
+  case 'deltrip':if(roBlock())break;confirmDeleteTrip();break;
   case 'prepgo':if(a.dataset.k)prepTab=a.dataset.k;show('prep',true);renderPrep();break;
   case 'prepback':show(prepBack||'today',true);break;
   case 'gotoday':{const ti=todayIdx();cur=ti>=0?ti:0;show('plan',true);renderPlan(false);break}
@@ -1259,7 +1288,7 @@ async function boot(){
     try{await loadFB()}catch(e){
       $('#loginbox').innerHTML=`<h1>旅行手帳</h1><p>${navigator.onLine?'載入登入元件失敗，請重新整理。':'目前沒有網路。第一次登入需要網路；登入過的手機下次沒網路也能打開。'}</p><button class="btn big" onclick="location.reload()">重新整理</button>`;return}
     fb.auth.getRedirectResult().catch(e=>renderLogin(authMsg(e)));
-    fb.auth.onAuthStateChanged(u=>{if(u){App.mode='fb';App.user={name:u.displayName||'',email:(u.email||'').toLowerCase(),uid:u.uid};App.autoOpened=false;App.tripsLoaded=false;goTrips()}else{if(App.tripsUnsub){App.tripsUnsub();App.tripsUnsub=null}closeTrip();App.user=null;App.trips=[];showScreen('login');renderLogin()}});
+    fb.auth.onAuthStateChanged(u=>{if(u){App.mode='fb';App.user={name:u.displayName||'',email:(u.email||'').toLowerCase(),uid:u.uid};App.autoOpened=false;App.tripsLoaded=false;goTrips();checkAdmin()}else{if(App.tripsUnsub){App.tripsUnsub();App.tripsUnsub=null}closeTrip();App.user=null;App.isAdmin=false;App.trips=[];showScreen('login');renderLogin()}});
     if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});return}
   App.mode='demo';App.user={name:'',email:'local'};goTrips();{const pk=autoPick();if(pk)openTrip(pk)}}
 
