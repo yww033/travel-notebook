@@ -370,6 +370,66 @@ html.offline a.btn[href^="http"]::after{content:"需網路";font-size:10px;margi
 @keyframes spin{to{transform:rotate(360deg)}}
 html.calm *,html.calm *::before,html.calm *::after{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ===== v31：第一版的歡樂（粗墨線、色塊、蓋章、會動的圖示）＋第二版的乾淨結構 ===== */
+.nb{border-bottom:2.5px solid var(--ink)}
+.bnav{border-top:2.5px solid var(--ink)}
+.bnav button{border-radius:16px;margin:0 2px;padding:3px 0 2px;color:var(--ink)}
+.bnav button svg{width:30px;height:30px}
+.bnav button.on{background:var(--yellow)}
+.bnav button.on svg{animation:bob 2.4s ease-in-out infinite}
+.bnav .bdot{border:2px solid var(--ink);width:12px;height:12px}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.grp,.card,.fg,.empty,ul.log{border:2.5px solid var(--ink);border-radius:20px}
+.empty{border-style:dashed}
+.grp>.row+.row,.grp>.sw+.sw,.grp>.row+.sw,.grp>.sw+.row,.grp>label.row+.row,.grp>.row+label.row,.fg>*+*,.lst li+li,.recs li+li,.rowc+.rowc,.log li+li,.ko .k+.k{border-top:2px solid var(--line)}
+.cap{font-size:13px;color:var(--ink-2);margin:4px 8px -4px}
+#triplist{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}
+.hero{border:2.5px solid var(--ink);border-radius:22px;background:var(--coral-l)}
+.hero.c{background:var(--mizu-l)}
+.hero .hic{width:64px;height:64px;margin:0 auto 2px}
+.bb2>*{border:2.5px solid var(--ink)!important;border-radius:16px}
+.bG{background:var(--paper)}.bG.on{background:var(--green-l)}
+.bb2>*:active,.addc:active{transform:translateY(1px)}
+.addc{border:2px solid var(--ink);background:var(--yellow)}
+.mustp,.stamp{background:var(--coral);border:2px solid var(--ink);color:var(--ink);border-radius:7px;transform:rotate(-6deg);font-size:11.5px;line-height:18px;padding:0 6px}
+.okc{border:2px solid var(--ink);width:22px;height:22px}
+.wn{border:2px solid var(--ink);width:22px;height:22px}
+input.ck{border:2px solid var(--ink)}
+.ricon{border:2px solid var(--ink)}
+.ricon svg{width:22px;height:22px}
+.tic{width:52px;height:52px;border:2.5px solid var(--ink);border-radius:16px}
+.tic svg{width:38px;height:38px}
+.dd{border:2px solid transparent;width:46px}
+.dd.on{background:var(--yellow);border-color:var(--ink);color:var(--ink)}.dd.on b{color:var(--ink)}
+.dd .wi svg{width:20px;height:20px}
+.dhd{display:flex;gap:12px;align-items:center}
+.dhd .dic{width:56px;height:56px;border:2.5px solid var(--ink);border-radius:18px;display:grid;place-items:center;flex:none}
+.dhd .dic svg{width:42px;height:42px}
+.dhd .phead{flex:1;min-width:0}
+.tipx{border:2px dashed var(--ink);background:var(--yellow-l)}
+.seg{border:2.5px solid var(--ink);border-radius:999px;background:var(--paper);padding:0;gap:0;overflow:hidden}
+.seg button{border-radius:0;color:var(--ink)}
+.seg button+button{border-left:2px solid var(--ink)}
+.seg button.on{background:var(--yellow);box-shadow:none}
+.chip{border:2px solid var(--ink);background:var(--paper)}
+.chip.on{background:var(--mizu);color:var(--ink)}
+.daypick button{border:2px solid var(--ink);background:var(--paper);color:var(--ink)}
+.daypick button.on{background:var(--yellow);color:var(--ink)}.daypick button.on b{color:var(--ink)}
+.srch{border:2.5px solid var(--ink);border-radius:999px;background:var(--paper)}
+.sheet{border-top:3px solid var(--ink);box-shadow:none}
+.toast{border:2px solid var(--ink)}
+.warnx{border:2px dashed var(--ink)}
+.advice{border:2px dashed var(--ink)}
+.swapb{border:2px solid var(--ink)}
+.upl{border:2px dashed var(--ink);color:var(--ink)}
+.fhero{border:2.5px solid var(--ink)}
+.row .thumb{border:2px solid var(--ink)}
+.thumb.ph0{border:2px solid var(--ink)}
+.prow img{border:2px solid var(--ink)}
+.bigcard .btn,.btn{border:2px solid var(--ink)}
+.btn.dash{border-style:dashed}
+.lnk.chip{border:0}
 </style>
 </head>
 <body>
@@ -1296,6 +1356,7 @@ async function boot(){
    ===================================================================== */
 const TABI={today:'<path d="M4 11l8-6 8 6v8.5a.5.5 0 0 1-.5.5H4.5a.5.5 0 0 1-.5-.5z"/>',plan:'<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/>',fx:'<circle cx="12" cy="12" r="8.5"/><path d="M9 7.5l3 4 3-4M12 11.5V17M9.3 13h5.4"/>',eat:'<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',tools:'<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>'};
 const STK={today:[],plan:[],fx:[],eat:[],tools:[]};
+const TABP={today:'home',plan:'cal',fx:'coin',eat:'bowl',tools:'tool'};
 const stkOf=()=>STK[view==='prep'?'tools':view]||[];
 const topPg=()=>{const s=stkOf();return s[s.length-1]};
 let TOASTFN=null,swMoved=false;
@@ -1309,7 +1370,7 @@ const ricon=(n,bg)=>`<span class="ricon" style="background:${bg||'var(--fill)'}"
 
 /* ---------- 上方標題列、底部分頁 ---------- */
 function renderNav(){const tv=view==='prep'?'tools':view;const dot=App.mode==='fb'&&unreadLog().length>0;
-  $('#bnav').innerHTML=VIEWS.map(([k,n])=>`<button class="${tv===k?'on':''}" data-act="view" data-v="${k}" aria-label="${n}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${TABI[k]}</svg><span>${n}</span>${k==='tools'&&dot?'<i class="bdot"></i>':''}</button>`).join('')}
+  $('#bnav').innerHTML=VIEWS.map(([k,n])=>`<button class="${tv===k?'on':''}" data-act="view" data-v="${k}" aria-label="${n}"><svg viewBox="0 0 40 40" ${SA}>${k==='fx'?`<circle cx="20" cy="20" r="14" fill="#F6D27A"/><text x="20" y="26.5" text-anchor="middle" font-size="17" fill="#3E3A39" stroke="none" font-family="Huninn,sans-serif">${esc(curInfo()[0])}</text>`:P[TABP[k]]}</svg><span>${n}</span>${k==='tools'&&dot?'<i class="bdot"></i>':''}</button>`).join('')}
 function paintLogDot(){if(App.tripId)renderNav()}
 function renderTop(){if(!App.meta)return;const pg=topPg();let L={t:'‹ 旅程',act:'trips'},T=App.meta.name+(isRO()?'（只能看）':''),R=null;
   if(view==='prep'){L={t:'‹ '+(prepBack==='today'?'今天':'更多'),act:'back'};T='準備清單';R={t:'＋',act:'prepadd',plus:1}}
@@ -1348,7 +1409,7 @@ function renderPlan(anim){const el=$('#v-plan');if(!el||!App.meta)return;const p
   if(pg&&pg.k==='photos'){el.innerHTML=photosPage(pg.i);hydratePics(el);renderTop();return}
   const i=Math.min(cur,App.meta.days-1);cur=i;const s=slot(i),c=day(i),arr=get('arrive').m;
   const ph=(get('ootd')['d'+i]||{}),nph=Object.values(ph).reduce((a,v)=>a+(Array.isArray(v)?v.length:0),0),nf=areaFoods(i).length,pb=c.planB;
-  el.innerHTML=`<div class="phead"><div class="big">${s.md}（${WD[s.w]}）</div><div class="subt"><span>${esc([c.area,c.theme].filter(Boolean).join('・'))}</span>${wxLink(i)}</div></div>${dayStrip(i)}
+  el.innerHTML=`<div class="dhd"><span class="dic" style="background:var(--${['mizu','yellow','green','coral'][i%4]}-l)"><svg viewBox="0 0 40 40" ${SA}>${P[c.icon]||P.cal}</svg></span><div class="phead"><div class="big">${s.md}（${WD[s.w]}）</div><div class="subt"><span>${esc([c.area,c.theme].filter(Boolean).join('・'))}</span>${wxLink(i)}</div></div></div>${dayStrip(i)}
   ${c.variants?`<div class="fest">鱒魚節：${[['hwacheon','華川'],['pyeongchang','平昌']].map(([k,n])=>`<button class="chip${c.fest===k?' on':''}" data-act="fest" data-k="${k}">${n}</button>`).join('')}<span class="muted">還沒決定</span></div>`:''}
   ${c.tip?`<div class="tipx" data-act="tip">💡 ${esc(c.tip)}</div>`:''}
   <div class="grp${anim?' pop':''}" id="tl">${c.items.map(it=>planRow(it,s.w,arr)).join('')||'<div class="row empty1">這天還沒有行程，按右上角「＋」新增</div>'}</div>
@@ -1418,7 +1479,7 @@ function urgentRows(){const m=get('checks').m,t0=get('lists').tabs[0],bk=get('bo
   bk.filter(b=>!b.due).forEach(b=>R.push(`<div class="row"><input class="ck" type="checkbox" data-book="${b.id}" aria-label="已預約"><div class="mn" data-act="bookedit" data-id="${b.id}"><div class="nm">${esc(b.name)}</div><div class="sb">預約${b.date?'・'+esc(b.date):''}</div></div></div>`));return R}
 function todayBefore(){const ms=Math.max(0,startAt()-Date.now()),d=Math.floor(ms/864e5),st=listStats(),t0=get('lists').tabs[0],s0=t0?st[t0.id]:{done:0,all:0};const R=urgentRows(),cw=coldest(),pend=pendingList(),un=App.mode==='fb'?unreadLog():[];let h='';
   if(addDaysISO(todayISO(),1)===App.meta.start)h+=packCardQ('明天出發！今晚把行李整理好');
-  h+=`<div class="hero c"><div class="k">距離出發</div><div class="tmx">${d} 天</div><div class="small muted">${slotLabel(0)} 出發・${App.meta.days} 天${App.meta.sub?'・'+esc(App.meta.sub):''}</div></div>`;
+  h+=`<div class="hero c"><svg class="hic" viewBox="0 0 40 40" ${SA}>${P[App.meta.icon]||(App.meta.hero==='trout'?P.fish:P.suitcase)}</svg><div class="k">距離出發</div><div class="tmx">${d} 天</div><div class="small muted">${slotLabel(0)} 出發・${App.meta.days} 天${App.meta.sub?'・'+esc(App.meta.sub):''}</div></div>`;
   h+=`<div class="cap">${R.length?'還沒完成的準備':'準備清單'}</div><div class="grp">${R.slice(0,3).join('')}${rowH({nm:'看全部準備清單',sb:`${esc(t0?t0.name:'待辦')} ${s0.done}/${s0.all}・預約 ${st.book.done}/${st.book.all}`,act:'prepgo'})}</div>`;
   if(cw)h+=`<div class="cap">天氣</div><div class="grp">${rowH({left:`<span class="wxi">${wxIcon(cw.code)}</span>`,nm:`整趟最低 ${deg(cw.min)}`,sb:esc(advice(cw)),act:'wxall'})}</div>`;
   else h+=`<div class="cap">天氣</div><div class="grp">${rowH({nm:'每天的天氣',sb:'天氣讀取中或還沒設定地點',act:'wxall'})}</div>`;
