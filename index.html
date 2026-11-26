@@ -430,6 +430,20 @@ input.ck{border:2px solid var(--ink)}
 .bigcard .btn,.btn{border:2px solid var(--ink)}
 .btn.dash{border-style:dashed}
 .lnk.chip{border:0}
+
+/* ===== v32：電腦版日期列、篩選按鈕、手機字放大 ===== */
+.dstrip{justify-content:space-between}
+.dd{flex:1 0 46px;max-width:68px}
+.sw>.row{-webkit-user-select:none;user-select:none}
+.filtbar .lnk{border:2px solid var(--ink);border-radius:999px;padding:9px 16px;font-size:15px;color:var(--ink);background:var(--paper);min-height:42px}
+.row .nm{font-size:16.5px}.row .sb{font-size:13.5px}.row .val{font-size:14.5px}.row .tm{font-size:16px;width:48px}
+.cap{font-size:14px}.small{font-size:14px}.subt{font-size:14.5px}.lnk{font-size:14.5px}
+.bnav button{font-size:12px}.dd{font-size:12px}.dd b{font-size:17px}
+.tipx{font-size:14.5px;line-height:1.5;max-height:calc(3em + 16px)}
+.tipx.open{max-height:none}
+.tipx:not(.open){display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.note{font-size:15.5px}.mustp,.stamp{font-size:12px}
+.hero .k{font-size:14px}.f{font-size:13.5px}.sheet h3,.shd h3{font-size:17px}.seg button{font-size:14.5px}
+.btn.s{font-size:14px;padding:5px 12px}
 </style>
 </head>
 <body>
@@ -633,8 +647,8 @@ async function deleteTrip(id){if(App.mode==='demo'){lsSet('trips',(lsGet('trips'
   const ref=fb.db.collection('trips').doc(id);for(const k of DOC_KEYS){try{await ref.collection('docs').doc(k).delete()}catch(e){}}await ref.delete();goTrips()}
 
 /* --- 打開一個旅程 --- */
-function openTrip(id){closeTrip();Object.keys(STK).forEach(k=>STK[k]=[]);const t=App.trips.find(x=>x.id===id);if(!t)return;App.tripId=id;App.meta=clone(t);delete App.meta.id;ST={};LOG=[];if(lsGet(seenKey())==null)lsSet(seenKey(),Date.now());cur=0;Object.keys(WX).forEach(k=>delete WX[k]);wxAt=0;wxFail=false;wxSig='';srchQ='';foodType='all';foodCat=null;toolSub=null;openT.clear();$('#v-eat').innerHTML='';
-  const ti=todayIdx();if(ti>=0)cur=ti;view=lsGet('view:'+id)||'today';
+function openTrip(id){closeTrip();Object.keys(STK).forEach(k=>STK[k]=[]);const t=App.trips.find(x=>x.id===id);if(!t)return;App.tripId=id;App.meta=clone(t);delete App.meta.id;ST={};LOG=[];if(lsGet(seenKey())==null)lsSet(seenKey(),Date.now());cur=0;Object.keys(WX).forEach(k=>delete WX[k]);wxAt=0;wxFail=false;wxSig='';srchQ='';foodType='all';foodCat=null;eatTab=lsGet('eatTab:'+id)||'food';toolSub=null;openT.clear();$('#v-eat').innerHTML='';
+  const ti=todayIdx();if(ti>=0)cur=ti;else{const c0=parseInt(lsGet('cur:'+id));if(c0>=0&&c0<(App.meta.days||1))cur=c0}view=lsGet('view:'+id)||'today';
   if(App.mode==='demo'){DOC_KEYS.forEach(k=>{ST[k]=lsGet(`t:${id}:${k}`)||blankDocs(App.meta)[k]});LOG=lsGet(`t:${id}:log`)||[];migrate();showScreen('app');renderAll();show(view,false);loadWeather();autoFx();return}
   const ref=fb.db.collection('trips').doc(id);showScreen('app');DOC_KEYS.forEach(k=>{ST[k]=blankDocs(App.meta)[k]});renderAll();show(view,false);
   App.unsub.push(ref.onSnapshot(s=>{if(s.exists){App.meta=fsDec(s.data());renderTop()}}));
@@ -866,7 +880,7 @@ function renderEatBody(){const box=$('#eatbody');if(!box)return;const _r=$('#fca
   if(q){const has=a=>a.filter(Boolean).join(' ').toLowerCase().includes(q);const F=get('food').items.filter(f=>has([f.name,f.kr,f.note,...(f.recs||[]).map(r=>r.n+' '+(r.note||''))])),S=get('shop').items.filter(p=>has([p.name,p.where,p.note,p.who])),O=get('pool').items.filter(p=>has([p.title,p.kr,p.note]));
     h=(F.length?`<div class="sec-t">${ic('bowl')} 美食<span class="sub">${F.length}</span></div><div class="rows">${F.map(foodCard).join('')}</div>`:'')+(S.length?`<div class="sec-t">${ic('bag')} 想買<span class="sub">${S.length}</span></div><div class="rows">${S.map(shopRow).join('')}</div>`:'')+(O.length?`<div class="sec-t">${ic('pin')} 景點收藏<span class="sub">${O.length}</span></div><div class="rows">${O.map(poolRow).join('')}</div>`:'')||'<div class="empty">找不到符合的項目</div>'}
   else{h=`<div class="seg">${[['food','美食'],['shop','想買'],['pool','景點收藏']].map(([k,n])=>`<button class="${eatTab===k?'on':''}" data-act="eattab" data-k="${k}">${n}</button>`).join('')}</div>`;
-    if(eatTab==='food'){const F=get('food'),valid=new Set(F.cats.map(c=>c.id));const orphan=F.items.some(f=>!valid.has(f.cat));const a=foodCat??(((day(cur).areas||[])[0])||'all');
+    if(eatTab==='food'){const F=get('food'),valid=new Set(F.cats.map(c=>c.id));const orphan=F.items.some(f=>!valid.has(f.cat));const a=foodCat??'all';
       const list=F.items.filter(f=>(a==='all'||(a==='none'?!valid.has(f.cat):f.cat===a))&&(foodType==='all'||(foodType==='none'?!f.type:f.type===foodType)));
       h+=`<div class="filt"><div class="frow"><span class="flab">地區</span><div class="chips" id="fcatrow">${[['all','全部'],...F.cats.map(c=>[c.id,c.name]),...(orphan?[['none','未分類']]:[])].map(([id,n])=>`<button class="chip${a===id?' on':''}" data-act="fcat" data-id="${id}">${esc(n)}${a===id&&id!=='all'&&id!=='none'?`<span class="cped" data-act="catedit" data-id="${id}" aria-label="編輯地區">${ic('pencil','s')}</span>`:''}</button>`).join('')}<button class="chip dash" data-act="catadd">${ic('plus','s')} 地區</button></div></div>
       <div class="frow"><span class="flab">類型</span><div class="seg sm">${[['all','全部'],...FTYPES,...(F.items.some(f=>!f.type)?[['none','未分類']]:[])].map(([id,n])=>`<button class="${foodType===id?'on':''}" data-act="ftype" data-id="${id}">${n}</button>`).join('')}</div></div></div>
@@ -1113,7 +1127,7 @@ document.addEventListener('click',async e=>{
   case 'delit':delItem(id);break;
   case 'planb':pushPg({k:'planb',back:slot(cur).md});break;
   case 'dayph':{const i=a.dataset.i!=null?+a.dataset.i:cur;cur=i;const pg={k:'photos',i,back:view==='today'?'今天':slot(i).md};if(view==='plan')pushPg(pg);else openIn('plan',pg);break}
-  case 'dayfood':{eatTab='food';foodCat=null;foodType='all';srchQ='';if(a.dataset.i!=null)cur=+a.dataset.i;const sr=$('#srch');if(sr)sr.value='';openIn('eat',null);break}
+  case 'dayfood':{eatTab='food';foodType='all';srchQ='';if(a.dataset.i!=null)cur=+a.dataset.i;foodCat=((day(cur).areas||[])[0])||'all';const sr=$('#srch');if(sr)sr.value='';openIn('eat',null);break}
   case 'tab':{const i=+a.dataset.i;if(i!==cur){cur=i;foodCat=null;STK.plan=[];renderPlan(true);renderEat()}break}
   case 'godate':cur=+a.dataset.i;openIn('plan',null);break;
   case 'gotoday':{const ti=todayIdx();cur=ti>=0?ti:0;openIn('plan',null);break}
@@ -1121,7 +1135,7 @@ document.addEventListener('click',async e=>{
   case 'food':{const pg={k:'food',id,back:'收藏',right:{t:'編輯',act:'foodedit',id}};if(view==='eat')pushPg(pg);else openIn('eat',pg);break}
   case 'sched':schedSheet(a.dataset.k,id);break;
   case 'saveadd':saveAdd();break;
-  case 'fcatpick':{const F=get('food'),valid=new Set(F.cats.map(c=>c.id));const a0=foodCat??(((day(cur).areas||[])[0])||'all');pickSheet('地區',[['all','全部地區'],...F.cats.map(c=>[c.id,c.name]),...(F.items.some(f=>!valid.has(f.cat))?[['none','未分類']]:[])],a0,v=>{foodCat=v;renderEatBody()},isRO()?'':`<div class="filtbar" style="justify-content:center"><button class="lnk" data-act="catadd">＋ 新增地區</button>${a0!=='all'&&a0!=='none'?`<button class="lnk" data-act="catedit" data-id="${a0}">編輯「${esc((F.cats.find(c=>c.id===a0)||{}).name||'')}」</button>`:''}</div>`);break}
+  case 'fcatpick':{const F=get('food'),valid=new Set(F.cats.map(c=>c.id));const a0=foodCat??'all';pickSheet('地區',[['all','全部地區'],...F.cats.map(c=>[c.id,c.name]),...(F.items.some(f=>!valid.has(f.cat))?[['none','未分類']]:[])],a0,v=>{foodCat=v;renderEatBody()},isRO()?'':`<div class="filtbar" style="justify-content:center"><button class="lnk" data-act="catadd">＋ 新增地區</button>${a0!=='all'&&a0!=='none'?`<button class="lnk" data-act="catedit" data-id="${a0}">編輯「${esc((F.cats.find(c=>c.id===a0)||{}).name||'')}」</button>`:''}</div>`);break}
   case 'ftypepick':pickSheet('類型',[['all','全部類型'],...FTYPES,...(get('food').items.some(f=>!f.type)?[['none','未分類']]:[])],foodType,v=>{foodType=v;renderEatBody()});break;
   case 'tpage':{const k=a.dataset.k,pg={k,back:view==='today'?'今天':'更多',title:TPT[k][0],right:TPT[k][1]};if(view==='tools')pushPg(pg);else openIn('tools',pg);break}
   case 'logsheet':openIn('tools',{k:'log',back:'更多',title:'修改紀錄'});break;
@@ -1182,7 +1196,7 @@ document.addEventListener('click',async e=>{
   case 'arrive':{const was=get('arrive').m[id],it=findItem(id);setKey('arrive',id,was?null:new Date().toISOString(),`${it?it.title:''}：${was?'取消打卡':'打卡'}`);if(!was)toast(it&&it.foodId?'打卡完成，這家店也標成吃過了':'打卡完成');break}
   case 'delpic':rmPhoto(a.dataset.w==='album'?`album:${a.dataset.i}`:`ootd:${a.dataset.i}:${a.dataset.w}`,+a.dataset.j);break;
   case 'gofood':{eatTab='food';foodCat='all';foodType='all';srchQ='';const sr=$('#srch');if(sr)sr.value='';openFood.add(id);show('eat',true);renderEat();setTimeout(()=>{const d=document.getElementById('fd_'+id);d&&d.scrollIntoView({block:'center'})},60);break}
-  case 'eattab':eatTab=a.dataset.k;renderEatBody();break;
+  case 'eattab':lsSet('eatTab:'+App.tripId,a.dataset.k);eatTab=a.dataset.k;renderEatBody();break;
   case 'fcat':{foodCat=id;renderEatBody();break}
   case 'catedit':editCat(id);break;
   case 'ftype':foodType=id;renderEatBody();break;
@@ -1407,17 +1421,17 @@ function renderPlan(anim){const el=$('#v-plan');if(!el||!App.meta)return;const p
   if(pg&&pg.k==='item'){const h=itemPage(pg.id);if(h!=null){el.innerHTML=h;hydratePics(el);renderTop();return}STK.plan.pop()}
   if(pg&&pg.k==='planb'){el.innerHTML=planBPage();renderTop();return}
   if(pg&&pg.k==='photos'){el.innerHTML=photosPage(pg.i);hydratePics(el);renderTop();return}
-  const i=Math.min(cur,App.meta.days-1);cur=i;const s=slot(i),c=day(i),arr=get('arrive').m;
+  const i=Math.min(cur,App.meta.days-1);cur=i;lsSet('cur:'+App.tripId,i);const s=slot(i),c=day(i),arr=get('arrive').m;
   const ph=(get('ootd')['d'+i]||{}),nph=Object.values(ph).reduce((a,v)=>a+(Array.isArray(v)?v.length:0),0),nf=areaFoods(i).length,pb=c.planB;
   el.innerHTML=`<div class="dhd"><span class="dic" style="background:var(--${['mizu','yellow','green','coral'][i%4]}-l)"><svg viewBox="0 0 40 40" ${SA}>${P[c.icon]||P.cal}</svg></span><div class="phead"><div class="big">${s.md}（${WD[s.w]}）</div><div class="subt"><span>${esc([c.area,c.theme].filter(Boolean).join('・'))}</span>${wxLink(i)}</div></div></div>${dayStrip(i)}
   ${c.variants?`<div class="fest">鱒魚節：${[['hwacheon','華川'],['pyeongchang','平昌']].map(([k,n])=>`<button class="chip${c.fest===k?' on':''}" data-act="fest" data-k="${k}">${n}</button>`).join('')}<span class="muted">還沒決定</span></div>`:''}
   ${c.tip?`<div class="tipx" data-act="tip">💡 ${esc(c.tip)}</div>`:''}
   <div class="grp${anim?' pop':''}" id="tl">${c.items.map(it=>planRow(it,s.w,arr)).join('')||'<div class="row empty1">這天還沒有行程，按右上角「＋」新增</div>'}</div>
-  ${c.items.length?'<div class="small muted" style="text-align:center;margin-top:-4px">往左滑可以改時間、換天、刪除・按住可以拖曳排序</div>':''}
+  ${c.items.length?'<div class="small muted" style="text-align:center;margin-top:-4px">'+(matchMedia('(pointer:fine)').matches?'用滑鼠往左拖':'往左滑')+'可以改時間、換天、刪除・按住不放可以拖曳排序</div>':''}
   <div class="grp">${rowH({nm:'雨雪備案',val:pb?esc(pb.title):'還沒有',act:'planb'})}${rowH({nm:'這天的照片・OOTD',val:nph?nph+' 張':'',act:'dayph'})}${rowH({nm:'這區美食',val:nf?nf+' 家':'還沒連結地區',act:'dayfood'})}${rowH({nm:'這天的設定',val:'主題、地區、互換、複製',act:'daymenu'})}</div>`;
   hydratePics(el);bindSwipe(el);
   if(sortable){sortable.destroy();sortable=null}
-  const tl=$('#tl');if(window.Sortable&&c.items.length&&!isRO()){sortable=Sortable.create(tl,{draggable:'.sw',delay:350,delayOnTouchOnly:true,touchStartThreshold:6,animation:calm()?0:160,ghostClass:'ghost',forceFallback:true,fallbackOnBody:true,filter:'.swa',
+  const tl=$('#tl');if(window.Sortable&&c.items.length&&!isRO()){sortable=Sortable.create(tl,{draggable:'.sw',delay:350,delayOnTouchOnly:false,touchStartThreshold:6,animation:calm()?0:160,ghostClass:'ghost',forceFallback:true,fallbackOnBody:true,filter:'.swa',
     onStart:()=>{dragging=true;dropTab=null},onEnd:e=>{dragging=false;const to=dropTab;dropTab=null;document.querySelectorAll('.dd.drop').forEach(x=>x.classList.remove('drop'));
     if(to!=null&&to!==cur){const p=clone(get('plan'));const [m]=p.days[cur].items.splice(e.oldIndex,1);p.days[to].items.push(m);sortItems(p.days[to]);commit('plan',p,`「${m.title}」從 ${slot(cur).md} 拖到 ${slot(to).md}`);toastUndo(`已移到 ${slot(to).md}`);return}
     if(e.oldIndex===e.newIndex){flushPending();renderPlan(false);return}const p=clone(get('plan'));const d=p.days[cur];const [m]=d.items.splice(e.oldIndex,1);d.items.splice(e.newIndex,0,m);commit('plan',p,`${slot(cur).md}「${m.title}」移到第 ${e.newIndex+1} 個`)}})}
@@ -1426,8 +1440,8 @@ function trackDrag(ev){if(!dragging)return;const t=ev.touches?ev.touches[0]:ev;i
 /* 左滑 */
 function closeSwipes(except){document.querySelectorAll('.sw.open').forEach(s=>{if(s!==except){s.classList.remove('open');s.firstElementChild.nextElementSibling.style.transform=''}})}
 function bindSwipe(root){if(isRO())return;root.querySelectorAll('.sw').forEach(sw=>{const r=sw.querySelector('.row');let x0=0,y0=0,dx=0,on=false,dec=null,base=0;
-  r.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&!e.altKey)return;x0=e.clientX;y0=e.clientY;dx=0;on=true;dec=null;base=sw.classList.contains('open')?-232:0;closeSwipes(sw)});
-  r.addEventListener('pointermove',e=>{if(!on||dragging)return;const ddx=e.clientX-x0,ddy=e.clientY-y0;if(dec==null){if(Math.abs(ddx)>8&&Math.abs(ddx)>Math.abs(ddy))dec='h';else if(Math.abs(ddy)>8)dec='v'}if(dec!=='h')return;dx=ddx;sw.classList.add('drag');r.style.transform=`translateX(${Math.min(0,Math.max(-250,base+dx))}px)`;swMoved=true});
+  r.addEventListener('pointerdown',e=>{if(e.button>0)return;swMoved=false;x0=e.clientX;y0=e.clientY;dx=0;on=true;dec=null;base=sw.classList.contains('open')?-232:0;closeSwipes(sw)});
+  r.addEventListener('pointermove',e=>{if(!on||dragging)return;const ddx=e.clientX-x0,ddy=e.clientY-y0;if(dec==null){if(Math.abs(ddx)>8&&Math.abs(ddx)>Math.abs(ddy))dec='h';else if(Math.abs(ddy)>8)dec='v'}if(dec!=='h')return;if(!sw.classList.contains('drag')){try{r.setPointerCapture(e.pointerId)}catch(_){}}dx=ddx;sw.classList.add('drag');r.style.transform=`translateX(${Math.min(0,Math.max(-250,base+dx))}px)`;swMoved=true});
   const end=()=>{if(!on)return;on=false;sw.classList.remove('drag');if(dec==='h'){const open=base+dx<-90;sw.classList.toggle('open',open);r.style.transform='';setTimeout(()=>swMoved=false,60)}};
   r.addEventListener('pointerup',end);r.addEventListener('pointercancel',end)})}
 document.addEventListener('click',e=>{if(swMoved){e.stopPropagation();e.preventDefault();swMoved=false;return}if(!e.target.closest('.sw.open .swa'))closeSwipes(null)},true);
@@ -1449,7 +1463,7 @@ function itemPage(id){const c=day(cur),it=c.items.find(x=>x.id===id);if(!it)retu
   ${H||B||f?`<div class="grp">${H?rowH({nm:'營業',val:esc(H)}):''}${B?rowH({nm:'休息',val:esc(B)}):''}${f?rowH({nm:'店家資料',sb:esc(f.name),act:'gofood',id:f.id}):''}</div>`:''}
   ${it.note?`<div class="cap">備註</div><div class="grp"><div class="note">${esc(it.note)}</div></div>`:''}
   <div class="cap">照片</div>${prow('item:'+id,it.photos)}<label class="upl">${ic('camera','s')} 加照片<input type="file" accept="image/*" multiple data-addph="item:${id}" hidden></label>
-  ${isRO()?'':`<div class="grp">${rowH({nm:'換到別天',act:'mvday',id})}${rowH({nm:'刪除這個行程',act:'delit',id,cls:'red',right:''})}</div>`}`}
+  ${isRO()?'':`<div class="grp"><div class="row" style="cursor:default"><div class="mn"><div class="nm">時間 ${esc(it.t||'未定')}</div></div><button class="btn s" data-act="tm" data-d="-15" data-id="${id}">−15</button><button class="btn s" data-act="tm" data-d="15" data-id="${id}">+15</button></div>${rowH({nm:'換到別天',act:'mvday',id})}${rowH({nm:'刪除這個行程',act:'delit',id,cls:'red',right:''})}</div>`}`}
 function planBPage(){const c=day(cur),pb=c.planB;return `<div class="big">雨雪備案</div><div class="subt"><span>${slot(cur).md}・${esc(c.theme||'')}</span></div>
   ${pb?`<div class="grp">${rowH({nm:esc(pb.title),sb:pb.note?esc(pb.note):'',wrap:1})}</div>${pb.items.length?`<div class="grp">${pb.items.map((p,k)=>rowH({nm:esc(p.title),left:`<span class="tm">${esc(p.t||'')}</span>`,right:isRO()?'':`<button class="btn s y" data-act="useb" data-k="${k}">加入這天</button>`})).join('')}</div>${pb.items.length>1&&!isRO()?`<div class="grp">${rowH({nm:'整天換成這個備案',act:'replaceb',cls:'center',right:''})}</div>`:''}`:''}`:'<div class="empty">這天還沒有備案</div>'}
   ${isRO()?'':`<div class="grp">${rowH({nm:'編輯備案',act:'editday'})}</div>`}`}
@@ -1568,7 +1582,7 @@ function renderEatBody(){const box=$('#eatbody');if(!box)return;const hd=$('#eat
   let h='';const w=phase()==='during'?slot(Math.max(0,todayIdx())).w:null;
   if(q){const has=a=>a.filter(Boolean).join(' ').toLowerCase().includes(q);const FF=F.items.filter(f=>has([f.name,f.kr,f.note,...(f.recs||[]).map(r=>r.n+' '+(r.note||''))])),S=get('shop').items.filter(p=>has([p.name,p.where,p.note,p.who])),O=get('pool').items.filter(p=>has([p.title,p.kr,p.note]));
     h=(FF.length?`<div class="cap">美食 ${FF.length}</div><div class="grp">${FF.map(f=>foodRowH(f,w)).join('')}</div>`:'')+(S.length?`<div class="cap">想買 ${S.length}</div><div class="grp">${S.map(shopRowH).join('')}</div>`:'')+(O.length?`<div class="cap">景點 ${O.length}</div><div class="grp">${O.map(poolRowH).join('')}</div>`:'')||'<div class="empty">找不到符合的項目</div>'}
-  else if(eatTab==='food'){const valid=new Set(F.cats.map(c=>c.id));const a=foodCat??(((day(cur).areas||[])[0])||'all');
+  else if(eatTab==='food'){const valid=new Set(F.cats.map(c=>c.id));const a=foodCat??'all';
     const list=F.items.filter(f=>(a==='all'||(a==='none'?!valid.has(f.cat):f.cat===a))&&(foodType==='all'||(foodType==='none'?!f.type:f.type===foodType)));
     const an=a==='all'?'全部地區':a==='none'?'未分類':((F.cats.find(c=>c.id===a)||{}).name||'全部地區'),tn=foodType==='all'?'全部類型':foodType==='none'?'未分類':((FTYPES.find(x=>x[0]===foodType)||[])[1]||'全部類型');
     h=`<div class="filtbar"><button class="lnk" data-act="fcatpick">${esc(an)} ▾</button><button class="lnk" data-act="ftypepick">${esc(tn)} ▾</button></div><div class="grp">${list.map(f=>foodRowH(f,w)).join('')||'<div class="row empty1">沒有符合的店家</div>'}</div>`}
@@ -1597,7 +1611,7 @@ function schedSheet(kind,id){const o=kind==='food'?get('food').items.find(x=>x.i
       closeSheet();if(!b.dataset.sl){editItem(null,Object.assign(pre,{_day:di}));return}
       const p=clone(get('plan')),it=Object.assign({id:uid(),go:'walk',must:false},pre,{t:b.dataset.sl});p.days[di].items.push(it);sortItems(p.days[di]);commit('plan',p,`${slot(di).md} ${b.dataset.n} 排進「${name}」`);toastUndo(`已排進 ${slot(di).md} ${b.dataset.n} ${b.dataset.sl}`)})})}
 function pickSheet(title,opts,curv,onPick,extra){openSheet(`<div class="shd"><button class="lk" data-act="close">取消</button><h3>${esc(title)}</h3><span></span></div><div class="fg" style="padding:0">${opts.map(([v,n])=>`<div class="row" data-pk="${esc(v)}"><div class="mn"><div class="nm">${esc(n)}</div></div>${String(v)===String(curv)?'<span style="color:var(--blue)">✓</span>':''}</div>`).join('')}</div>${extra||''}`,sh=>sh.querySelectorAll('[data-pk]').forEach(r=>r.onclick=()=>{closeSheet();onPick(r.dataset.pk)}))}
-function saveAdd(){if(isRO())return;if(eatTab==='shop')shopEdit(null,true);else if(eatTab==='pool')poolEdit(null,true);else{const a=foodCat??(((day(cur).areas||[])[0])||'all');editFood(null,a,true)}}
+function saveAdd(){if(isRO())return;if(eatTab==='shop')shopEdit(null,true);else if(eatTab==='pool')poolEdit(null,true);else{const a=foodCat??'all';editFood(null,a,true)}}
 
 /* ---------- 準備清單 ---------- */
 function renderPrep(){const el=$('#v-prep');if(!el||!App.meta)return;const L=get('lists'),st=listStats(),m=get('checks').m;

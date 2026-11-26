@@ -1,6 +1,6 @@
 // 讓手帳在沒網路時也打得開：把網頁本身和需要的元件存在手機裡。
 // 資料（行程、吃買…）由 Firebase 自己存在手機，不經過這裡。
-const CACHE = 'trip-notebook-v31';
+const CACHE = 'trip-notebook-v32';
 const CORE = ['./', './index.html', './firebase-config.js', './manifest.webmanifest',
   './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.ico'];
 const CDN = ['www.gstatic.com', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
